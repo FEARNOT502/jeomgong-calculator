@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar } from 'lucide-react';
+import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown } from 'lucide-react';
 
 // ==========================================
-// 1. 핵심 알고리즘 (날짜 연동 로직 추가됨)
+// 1. 핵심 알고리즘 (날짜 연동 로직 유지)
 // ==========================================
 const calculatePrediction = (inputs) => {
   const { quota, realApplicants, revealedCount, myRank, weight } = inputs;
@@ -14,45 +14,27 @@ const calculatePrediction = (inputs) => {
 
   const competitionRate = realApplicants / quota;
   
-  // --- 날짜 기반 로직 추가 ---
+  // 날짜 기반 로직
   const now = new Date();
   const currentYear = now.getFullYear();
-  const startDate = new Date(currentYear, 0, 1); // 올해 1월 1일 00:00
-  
-  // 1월 1일로부터 며칠 지났는지 계산 (음수면 0으로 처리)
+  const startDate = new Date(currentYear, 0, 1); 
   const timeDiff = now - startDate;
   const daysPassed = Math.max(0, Math.floor(timeDiff / (1000 * 60 * 60 * 24)));
-  
-  // 시간 경과에 따른 가중치 감소율 (Time Decay)
-  // 논리: 시간이 지날수록 고득점자는 이미 공개했을 확률이 높음 -> 미점공자의 위협도 감소
-  // 하루에 2%씩 가중치 감소, 최대 30%까지만 감소 (안전장치)
   const timeDecayFactor = Math.min(0.3, daysPassed * 0.02); 
 
-  // --- 가중치 산출 ---
   let baseWeight = weight ? parseFloat(weight) : null;
-  
   if (baseWeight === null) {
-    // 기본값: 경쟁률 로그 모델
     baseWeight = Math.max(0.2, 0.7 - (0.15 * Math.log(competitionRate)));
   }
-
-  // 날짜 보정 적용: (기본 가중치) * (1 - 시간감소율)
   const appliedWeight = baseWeight * (1 - timeDecayFactor);
 
-  // --- 등수 계산 ---
-  const unrevealedCount = realApplicants - revealedCount; // 미점공 인원
-  const rankRatio = myRank / revealedCount; // 점공 내 상위 비율
+  const unrevealedCount = realApplicants - revealedCount;
+  const rankRatio = myRank / revealedCount;
 
-  // (1) 낙관적 (Optimistic)
   const optimisticRank = myRank + (unrevealedCount * rankRatio * 0.2);
-
-  // (2) 합리적 (Realistic) - 날짜 보정된 가중치 사용
   const realisticRank = myRank + (unrevealedCount * rankRatio * appliedWeight);
-
-  // (3) 비관적 (Pessimistic)
   const pessimisticRank = myRank * (realApplicants / revealedCount);
 
-  // --- 합격 확률 판정 ---
   const ratio = realisticRank / quota;
   let probability = { label: "분석 불가", color: "text-gray-500", bgColor: "bg-gray-100", score: 0 };
 
@@ -101,8 +83,9 @@ const InputField = ({ label, name, value, onChange, placeholder, subtext, type =
   </div>
 );
 
-const InputForm = ({ inputs, setInputs, onCalculate, onReset }) => {
+const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad, onDelete }) => {
   const [error, setError] = useState(null);
+  const [isLoadOpen, setIsLoadOpen] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -129,7 +112,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset }) => {
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
-      <div className="flex items-center justify-between mb-6 border-b pb-4">
+      <div className="flex items-center justify-between mb-4 border-b pb-4">
         <div className="flex items-center gap-2">
           <GraduationCap className="text-indigo-600" size={24} />
           <h2 className="text-xl font-bold text-gray-800">데이터 입력</h2>
@@ -142,9 +125,59 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset }) => {
           <RotateCcw size={14} /> 초기화
         </button>
       </div>
+
+      {/* 저장된 데이터 불러오기 영역 */}
+      <div className="mb-6 bg-indigo-50 rounded-lg p-3 relative">
+        <button 
+          onClick={() => setIsLoadOpen(!isLoadOpen)}
+          className="w-full flex items-center justify-between text-indigo-800 font-semibold text-sm"
+        >
+          <span className="flex items-center gap-2">
+            <FolderOpen size={18} /> 저장된 데이터 불러오기 ({savedList.length})
+          </span>
+          <ChevronDown size={16} className={`transform transition-transform ${isLoadOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {isLoadOpen && (
+          <div className="mt-3 space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
+            {savedList.length === 0 ? (
+              <p className="text-xs text-center text-gray-500 py-2">저장된 내역이 없습니다.<br/>계산을 실행하면 자동으로 저장됩니다.</p>
+            ) : (
+              savedList.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between bg-white p-2 rounded border border-indigo-100 shadow-sm hover:border-indigo-300 transition-colors">
+                  <button 
+                    onClick={() => {
+                      onLoad(item);
+                      setIsLoadOpen(false);
+                      setError(null);
+                    }}
+                    className="flex-1 text-left"
+                  >
+                    <div className="text-sm font-bold text-gray-800">
+                      {item.university || "대학 미입력"} <span className="text-indigo-600">{item.department || "학과 미입력"}</span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {item.lastUpdated} | {item.quota}명 모집 / {item.myRank}등
+                    </div>
+                  </button>
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(idx);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                    title="삭제"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
       
       <div className="grid grid-cols-1 gap-y-1">
-        {/* 학교/학과 입력 필드 추가 */}
         <div className="grid grid-cols-2 gap-3 mb-2">
           <InputField 
             label="목표 대학" 
@@ -152,7 +185,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset }) => {
             type="text"
             value={inputs.university} 
             onChange={handleChange} 
-            placeholder="예: 서울대" 
+            placeholder="예: 한국대" 
           />
           <InputField 
             label="모집 단위(학과)" 
@@ -227,11 +260,11 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset }) => {
         className="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] shadow-lg flex justify-center items-center gap-2"
       >
         <Calculator size={20} />
-        분석 결과 확인하기
+        분석 및 저장하기
       </button>
       
       <div className="mt-3 flex justify-center text-xs text-gray-400 items-center gap-1">
-        <Save size={12} /> 데이터는 브라우저에 자동 저장됩니다.
+        <Save size={12} /> 계산 시 자동으로 저장소에 기록됩니다.
       </div>
     </div>
   );
@@ -246,7 +279,7 @@ const ResultView = ({ result, inputs }) => {
       <div className="text-6xl mb-6 opacity-20">📊</div>
       <h3 className="text-xl font-bold text-gray-400">데이터를 입력해주세요</h3>
       <p className="text-gray-400 mt-2 text-sm">
-        입력하신 데이터는 자동으로 저장되어<br/>나중에 다시 확인할 수 있습니다.
+        대학/학과 정보를 입력하고 계산하면<br/>해당 내용이 목록에 저장됩니다.
       </p>
     </div>
   );
@@ -361,21 +394,33 @@ function App() {
     weight: ''
   };
 
-  // State 초기화 시 localStorage에서 데이터 불러오기 (Lazy Initialization)
+  // 현재 입력 중인 데이터 State
   const [inputs, setInputs] = useState(() => {
-    const saved = localStorage.getItem('jeomgong_data');
-    return saved ? JSON.parse(saved) : initialInputs;
+    // 1. 마지막 작업 세션이 있다면 불러오기 (임시 저장용)
+    const lastSession = localStorage.getItem('jeomgong_current_session');
+    return lastSession ? JSON.parse(lastSession) : initialInputs;
+  });
+
+  // 저장된 리스트 State
+  const [savedList, setSavedList] = useState(() => {
+    const saved = localStorage.getItem('jeomgong_list');
+    return saved ? JSON.parse(saved) : [];
   });
   
   const [result, setResult] = useState(null);
 
-  // inputs가 변경될 때마다 localStorage에 저장
+  // inputs 변경 시 '현재 세션'에만 임시 저장 (새로고침 대비)
   useEffect(() => {
-    localStorage.setItem('jeomgong_data', JSON.stringify(inputs));
+    localStorage.setItem('jeomgong_current_session', JSON.stringify(inputs));
   }, [inputs]);
 
+  // savedList 변경 시 영구 저장소 업데이트
+  useEffect(() => {
+    localStorage.setItem('jeomgong_list', JSON.stringify(savedList));
+  }, [savedList]);
+
   const handleCalculate = () => {
-    // 텍스트를 숫자로 변환하여 전달
+    // 1. 계산 실행
     const calcInputs = {
       ...inputs,
       quota: parseFloat(inputs.quota),
@@ -385,13 +430,61 @@ function App() {
     };
     const calcResult = calculatePrediction(calcInputs);
     setResult(calcResult);
+
+    // 2. 저장소 업데이트 (대학/학과가 입력된 경우에만)
+    if (inputs.university && inputs.department) {
+      const now = new Date();
+      const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${now.getMinutes() < 10 ? '0' + now.getMinutes() : now.getMinutes()}`;
+      
+      const newItem = {
+        ...inputs,
+        lastUpdated: timestamp
+      };
+
+      setSavedList(prevList => {
+        // 동일한 학교/학과가 있는지 찾기
+        const existingIndex = prevList.findIndex(
+          item => item.university === inputs.university && item.department === inputs.department
+        );
+
+        if (existingIndex >= 0) {
+          // 있으면 업데이트 (덮어쓰기)
+          const newList = [...prevList];
+          newList[existingIndex] = newItem;
+          return newList;
+        } else {
+          // 없으면 새로 추가 (배열 맨 앞에 추가)
+          return [newItem, ...prevList];
+        }
+      });
+    }
+  };
+
+  const handleLoad = (item) => {
+    // 선택한 데이터 불러오기 (lastUpdated 필드 등은 제외하고 입력값만)
+    setInputs({
+      university: item.university,
+      department: item.department,
+      quota: item.quota,
+      realApplicants: item.realApplicants,
+      revealedCount: item.revealedCount,
+      myRank: item.myRank,
+      weight: item.weight
+    });
+    setResult(null); // 입력값이 바뀌었으므로 결과창 초기화
+  };
+
+  const handleDelete = (index) => {
+    if (window.confirm('선택한 저장 데이터를 삭제하시겠습니까?')) {
+      setSavedList(prev => prev.filter((_, i) => i !== index));
+    }
   };
 
   const handleReset = () => {
-    if (window.confirm('입력된 데이터를 모두 초기화하시겠습니까?')) {
+    if (window.confirm('현재 입력된 내용을 모두 지우시겠습니까?')) {
       setInputs(initialInputs);
       setResult(null);
-      localStorage.removeItem('jeomg_data');
+      localStorage.removeItem('jeomgong_current_session');
     }
   };
 
@@ -403,7 +496,7 @@ function App() {
             🎓 점수공개 계산기
           </h1>
           <p className="text-indigo-200 text-sm mt-2 font-light">
-            AI 기반 점수공개 예측 서비스 (자동저장/날짜연동)
+            AI 기반 점수공개 예측 서비스 (자동저장/날짜연동/다중저장)
           </p>
         </div>
       </header>
@@ -417,6 +510,9 @@ function App() {
               setInputs={setInputs} 
               onCalculate={handleCalculate} 
               onReset={handleReset}
+              savedList={savedList}
+              onLoad={handleLoad}
+              onDelete={handleDelete}
             />
             
             <div className="mt-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 text-sm text-gray-600">
@@ -424,10 +520,10 @@ function App() {
                 💡 사용 가이드
               </h3>
               <ul className="list-disc list-inside space-y-1 ml-1 text-xs sm:text-sm">
-                <li>진학사 등 점공 사이트의 실시간 데이터를 입력하세요.</li>
-                <li><strong>모집인원</strong>은 이월 인원이 포함된 최종 인원입니다.</li>
+                <li><strong>계산하기</strong>를 누르면 학교/학과별로 데이터가 자동 저장됩니다.</li>
+                <li>같은 학교/학과의 데이터를 다시 계산하면 기존 내역이 업데이트됩니다.</li>
+                <li><strong>불러오기</strong> 메뉴에서 저장해둔 데이터를 쉽게 가져올 수 있습니다.</li>
                 <li>1월 1일 이후 경과일에 따라 예측 가중치가 자동 보정됩니다.</li>
-                <li>입력한 데이터는 브라우저 닫아도 유지됩니다.</li>
               </ul>
             </div>
           </div>
