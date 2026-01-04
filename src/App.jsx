@@ -603,49 +603,40 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
   }, [result]);
 
   const handleDownloadImage = async () => {
-    // 1. 원본 요소 가져오기
     const element = document.getElementById('report-card');
     if (!element) return;
 
     try {
-      // 2. html2canvas 라이브러리 로드 체크
-      if (!window.html2canvas) {
+      // 1. dom-to-image 라이브러리 로드 (html2canvas의 oklch 에러 해결을 위해 변경)
+      if (!window.domtoimage) {
         await new Promise((resolve, reject) => {
           const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js';
           script.onload = resolve;
           script.onerror = reject;
           document.head.appendChild(script);
         });
       }
 
-      // 3. 요소 복제 및 스타일 조정 (화면 밖에서 전체 캡처 준비)
-      const clone = element.cloneNode(true);
-      document.body.appendChild(clone);
-      
-      // 복제된 요소 스타일 설정: 화면 밖으로 이동시키고, 전체 높이를 표시하도록 설정
-      clone.style.position = 'fixed';
-      clone.style.left = '-10000px';
-      clone.style.top = '0';
-      clone.style.width = `${element.offsetWidth}px`; // 원본 너비 유지
-      clone.style.height = 'auto'; // 높이는 내용에 맞게 자동 조절
-      clone.style.zIndex = '-1000';
-      clone.style.overflow = 'visible'; // 잘림 방지
+      // 2. 고해상도 캡처를 위한 스케일 설정
+      const scale = 2;
+      const options = {
+        quality: 0.95,
+        bgcolor: '#ffffff',
+        width: element.offsetWidth * scale,
+        height: element.offsetHeight * scale,
+        style: {
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+          width: `${element.offsetWidth}px`,
+          height: `${element.offsetHeight}px`
+        }
+      };
 
-      // 4. 캡처 실행 (복제된 요소 대상)
-      const canvas = await window.html2canvas(clone, {
-        scale: 2, // 고해상도
-        backgroundColor: '#ffffff',
-        useCORS: true,
-        logging: false,
-        windowWidth: clone.scrollWidth,
-        windowHeight: clone.scrollHeight
-      });
+      // 3. 캡처 실행 (dom-to-image 사용)
+      const dataUrl = await window.domtoimage.toJpeg(element, options);
 
-      // 5. 복제된 요소 제거
-      document.body.removeChild(clone);
-
-      // 6. 다운로드 처리
+      // 4. 다운로드 처리
       const link = document.createElement('a');
       
       let dateStr = "";
@@ -662,7 +653,7 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
       const filename = `점공분석_${inputs.university || '대학'}_${inputs.department || '학과'}${dateStr}${hourStr}.jpg`;
       
       link.download = filename;
-      link.href = canvas.toDataURL('image/jpeg', 0.9);
+      link.href = dataUrl;
       
       document.body.appendChild(link);
       link.click();
@@ -670,7 +661,6 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
 
     } catch (error) {
       console.error('Screenshot failed:', error);
-      // 구체적인 에러 메시지 표시
       alert(`이미지 저장 실패: ${error.message || '알 수 없는 오류가 발생했습니다.'}`);
     }
   };
