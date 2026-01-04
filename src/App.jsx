@@ -52,7 +52,7 @@ const LogicModal = ({ onClose }) => {
 
             <section>
               <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
+                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
                 가중치는 어떻게 구해지나요?
               </h3>
               <p className="text-sm mb-3">
@@ -73,7 +73,7 @@ const LogicModal = ({ onClose }) => {
 
             <section>
               <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
                 시간 보정 (Time Decay)
               </h3>
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm space-y-2">
@@ -88,7 +88,7 @@ const LogicModal = ({ onClose }) => {
 
             <section>
               <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">4</span>
+                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
                 최종 등수 계산
               </h3>
               <div className="text-sm space-y-3">
@@ -108,7 +108,7 @@ const LogicModal = ({ onClose }) => {
 
             <section>
               <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">5</span>
+                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">4</span>
                 3가지 시나리오의 의미
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-center">
