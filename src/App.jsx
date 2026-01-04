@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X, BrainCircuit, Key, Save } from 'lucide-react';
+import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X, BrainCircuit, Key, Save, Download } from 'lucide-react';
 
 // ==========================================
 // 설정: Gemini 모델 변경
@@ -63,7 +63,6 @@ const getAiAdjustment = async (inputs, userApiKey) => {
   `;
 
   try {
-    // [MODIFIED] 상단에 정의된 GEMINI_MODEL 상수를 사용하여 URL 구성
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${userApiKey}`,
       {
@@ -603,6 +602,57 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
     if (result) setActiveScenario('realistic');
   }, [result]);
 
+  const handleDownloadImage = async () => {
+    const element = document.getElementById('report-card');
+    if (!element) return;
+
+    try {
+      // 1. html2canvas 라이브러리 동적 로드 (CDN)
+      if (!window.html2canvas) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      }
+
+      // 2. 캡처 실행
+      const canvas = await window.html2canvas(element, {
+        scale: 2, // 해상도 2배 (선명하게)
+        backgroundColor: '#ffffff', // 흰색 배경 강제
+        useCORS: true, // 외부 이미지 허용
+        scrollY: -window.scrollY // 스크롤 위치 보정 (잘림 방지)
+      });
+
+      // 3. 다운로드 트리거
+      const link = document.createElement('a');
+      
+      // [MODIFIED] 파일명 포맷 변경: 점공분석_xx대_xx_xx월_xx일_xx시.jpg
+      let dateStr = "";
+      if (inputs.calcDate) {
+        const [y, m, d] = inputs.calcDate.split('-');
+        dateStr = `_${m}월_${d}일`;
+      }
+      
+      let hourStr = "";
+      if (inputs.calcHour !== "" && inputs.calcHour !== undefined) {
+        hourStr = `_${inputs.calcHour}시`;
+      }
+
+      const filename = `점공분석_${inputs.university || '대학'}_${inputs.department || '학과'}${dateStr}${hourStr}.jpg`;
+      
+      link.download = filename;
+      link.href = canvas.toDataURL('image/jpeg', 0.9); // JPG 포맷, 품질 0.9
+      link.click();
+
+    } catch (error) {
+      console.error('Screenshot failed:', error);
+      alert('이미지 저장 중 오류가 발생했습니다.');
+    }
+  };
+
   if (isAiLoading) return (
      <div className="bg-white p-12 rounded-xl shadow-md border border-dashed border-indigo-200 text-center h-full flex flex-col justify-center items-center animate-pulse">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
@@ -640,14 +690,23 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
   const today = new Date().toLocaleDateString();
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-md border border-indigo-50 h-full flex flex-col">
+    <div id="report-card" className="bg-white p-6 rounded-xl shadow-md border border-indigo-50 h-full flex flex-col">
       <div className="flex items-center justify-between mb-4 border-b pb-4">
         <div className="flex items-center gap-2">
           <TrendingUp className="text-indigo-600" size={24} />
           <h2 className="text-xl font-bold text-gray-800">분석 리포트</h2>
         </div>
-        <div className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">
-          {today} 기준
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-1 rounded">
+            {today} 기준
+          </div>
+          <button 
+            onClick={handleDownloadImage}
+            className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+            title="이미지로 저장 (.jpg)"
+          >
+            <Download size={18} />
+          </button>
         </div>
       </div>
 
@@ -663,7 +722,8 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
         <p className="text-sm text-gray-600 font-semibold mb-2 flex justify-center items-center gap-2">
           {scenarioNames[activeScenario]} 결과
         </p>
-        <div className="text-6xl font-extrabold text-indigo-900 mb-2 tracking-tighter">
+        {/* [MODIFIED] pb-2 추가하여 폰트 아랫부분 잘림 방지 */}
+        <div className="text-6xl font-extrabold text-indigo-900 mb-2 tracking-tighter pb-2">
           {currentRank}
           <span className="text-2xl font-normal text-gray-400 ml-1">등</span>
         </div>
@@ -757,7 +817,7 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
                           </div>
                           <div className="flex justify-end mb-1">
                              <div className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                               * (0.5 - {(parseFloat(metrics.revealedRatio)/100).toFixed(3)}) × 0.2
+                               * 점공률이 낮을수록 보수적(+) 보정
                              </div>
                           </div>
                         </>
