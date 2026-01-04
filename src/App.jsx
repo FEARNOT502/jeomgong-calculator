@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown } from 'lucide-react';
 
 // ==========================================
-// 1. 핵심 알고리즘 (날짜 연동 로직 유지)
+// 1. 핵심 알고리즘 (추합 인원, 예비번호 로직)
 // ==========================================
 const calculatePrediction = (inputs) => {
-  const { quota, realApplicants, revealedCount, myRank, weight } = inputs;
+  const { quota, realApplicants, revealedCount, myRank, weight, additionalPasses } = inputs;
   
-  // 유효성 검사
   if (revealedCount > realApplicants) throw new Error("점공 인원이 전체 지원자보다 많을 수 없습니다.");
   if (myRank > revealedCount) throw new Error("나의 등수가 점공 인원보다 클 수 없습니다.");
   if (quota <= 0) throw new Error("모집 인원은 0보다 커야 합니다.");
@@ -35,14 +34,30 @@ const calculatePrediction = (inputs) => {
   const realisticRank = myRank + (unrevealedCount * rankRatio * appliedWeight);
   const pessimisticRank = myRank * (realApplicants / revealedCount);
 
-  const ratio = realisticRank / quota;
+  // --- [Modified] 추합 인원 반영 합격 확률 판정 ---
+  // 사용자 입력 추합 인원이 없으면 기본적으로 모집인원의 50% 가정
+  const userAdditionalPasses = (additionalPasses !== '' && additionalPasses !== null) 
+    ? parseFloat(additionalPasses) 
+    : Math.round(quota * 0.5);
+    
+  const maxRank = quota + userAdditionalPasses; // 모집인원 + 추합인원 = 최종 등수 컷
+
+  // 예비 번호 계산 (예상 등수 - 모집 인원)
+  // 음수면 최초합, 양수면 예비 번호
+  const waitingNum = Math.ceil(realisticRank) - quota;
+  
   let probability = { label: "분석 불가", color: "text-gray-500", bgColor: "bg-gray-100", score: 0 };
 
-  if (ratio <= 0.8) probability = { label: "최초합 확실 (Very Safe)", color: "text-blue-700", bgColor: "bg-blue-50", score: 95 };
-  else if (ratio <= 1.0) probability = { label: "최초합 적정 (Safe)", color: "text-green-700", bgColor: "bg-green-50", score: 80 };
-  else if (ratio <= 1.3) probability = { label: "추합 유력 (Probable)", color: "text-yellow-700", bgColor: "bg-yellow-50", score: 60 };
-  else if (ratio <= 1.6) probability = { label: "추합 가능 (Risky)", color: "text-orange-700", bgColor: "bg-orange-50", score: 40 };
-  else probability = { label: "불합격 유력 (Danger)", color: "text-red-700", bgColor: "bg-red-50", score: 10 };
+  // 모집인원 안쪽이면 최초합
+  if (waitingNum <= 0) {
+    if (realisticRank <= quota * 0.8) probability = { label: "최초합 확실 (Very Safe)", color: "text-blue-700", bgColor: "bg-blue-50", score: 95 };
+    else probability = { label: "최초합 적정 (Safe)", color: "text-green-700", bgColor: "bg-green-50", score: 85 };
+  } else {
+    // 예비 번호를 받았을 때
+    if (realisticRank <= maxRank * 0.8) probability = { label: "추합 유력 (Probable)", color: "text-yellow-700", bgColor: "bg-yellow-50", score: 65 };
+    else if (realisticRank <= maxRank) probability = { label: "추합권 (Risky)", color: "text-orange-700", bgColor: "bg-orange-50", score: 45 };
+    else probability = { label: "불합격 유력 (Danger)", color: "text-red-700", bgColor: "bg-red-50", score: 15 };
+  }
 
   return {
     ranks: {
@@ -50,20 +65,20 @@ const calculatePrediction = (inputs) => {
       realistic: Math.floor(realisticRank),
       pessimistic: Math.floor(pessimisticRank)
     },
+    waitingNum: waitingNum > 0 ? `예비 ${waitingNum}번` : `최초합 예상`,
     probability,
     metrics: {
       competitionRate: competitionRate.toFixed(2),
-      baseWeight: baseWeight.toFixed(2),
       appliedWeight: appliedWeight.toFixed(2),
-      timeDecayPercent: (timeDecayFactor * 100).toFixed(0),
-      daysPassed: daysPassed,
-      revealedRatio: ((revealedCount / realApplicants) * 100).toFixed(1)
+      revealedRatio: ((revealedCount / realApplicants) * 100).toFixed(1),
+      additionalPasses: userAdditionalPasses,
+      maxRank: Math.floor(maxRank)
     }
   };
 };
 
 // ==========================================
-// 2. 입력 컴포넌트
+// 2. 입력 컴포넌트 (추합 인원 입력으로 변경)
 // ==========================================
 const InputField = ({ label, name, value, onChange, placeholder, subtext, type = "number", step, min, max }) => (
   <div className="mb-4">
@@ -126,7 +141,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         </button>
       </div>
 
-      {/* 저장된 데이터 불러오기 영역 */}
+      {/* 저장된 데이터 불러오기 */}
       <div className="mb-6 bg-indigo-50 rounded-lg p-3 relative">
         <button 
           onClick={() => setIsLoadOpen(!isLoadOpen)}
@@ -141,7 +156,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         {isLoadOpen && (
           <div className="mt-3 space-y-2 max-h-40 overflow-y-auto custom-scrollbar">
             {savedList.length === 0 ? (
-              <p className="text-xs text-center text-gray-500 py-2">저장된 내역이 없습니다.<br/>계산을 실행하면 자동으로 저장됩니다.</p>
+              <p className="text-xs text-center text-gray-500 py-2">저장된 내역이 없습니다.</p>
             ) : (
               savedList.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between bg-white p-2 rounded border border-indigo-100 shadow-sm hover:border-indigo-300 transition-colors">
@@ -157,7 +172,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
                       {item.university || "대학 미입력"} <span className="text-indigo-600">{item.department || "학과 미입력"}</span>
                     </div>
                     <div className="text-xs text-gray-400 mt-0.5">
-                      {item.lastUpdated} | {item.quota}명 모집 / {item.myRank}등
+                      {item.lastUpdated} | {item.quota}명 / {item.myRank}등
                     </div>
                   </button>
                   <button 
@@ -166,7 +181,6 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
                       onDelete(idx);
                     }}
                     className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                    title="삭제"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -179,99 +193,49 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
       
       <div className="grid grid-cols-1 gap-y-1">
         <div className="grid grid-cols-2 gap-3 mb-2">
-          <InputField 
-            label="목표 대학" 
-            name="university" 
-            type="text"
-            value={inputs.university} 
-            onChange={handleChange} 
-            placeholder="예: 한국대" 
-          />
-          <InputField 
-            label="모집 단위(학과)" 
-            name="department" 
-            type="text"
-            value={inputs.department} 
-            onChange={handleChange} 
-            placeholder="예: 경영학과" 
-          />
+          <InputField label="대학" name="university" type="text" value={inputs.university} onChange={handleChange} placeholder="예: 서울대" />
+          <InputField label="학과" name="department" type="text" value={inputs.department} onChange={handleChange} placeholder="예: 경영학과" />
         </div>
 
+        <InputField label="모집 인원 (명)" name="quota" value={inputs.quota} onChange={handleChange} placeholder="예: 35" />
+        
+        {/* [Modified] 추합 인원 입력 필드 */}
         <InputField 
-          label="모집 인원 (명)" 
-          name="quota" 
-          value={inputs.quota} 
+          label="예상 추합 인원 (명)" 
+          name="additionalPasses" 
+          value={inputs.additionalPasses} 
           onChange={handleChange} 
-          placeholder="예: 35" 
+          placeholder="예: 15 (작년 입결 참고)" 
+          subtext="미입력시 모집 인원의 50%로 계산합니다."
         />
-        <InputField 
-          label="전체 지원자 수 (명)" 
-          name="realApplicants" 
-          value={inputs.realApplicants} 
-          onChange={handleChange} 
-          placeholder="최종 경쟁률 기준"
-        />
-        <InputField 
-          label="점수공개 참여 인원 (명)" 
-          name="revealedCount" 
-          value={inputs.revealedCount} 
-          onChange={handleChange} 
-          placeholder="현재 점공 리포트 기준" 
-        />
-        <InputField 
-          label="나의 점공 등수" 
-          name="myRank" 
-          value={inputs.myRank} 
-          onChange={handleChange} 
-          placeholder="예: 12" 
-        />
+
+        <InputField label="전체 지원자 수" name="realApplicants" value={inputs.realApplicants} onChange={handleChange} placeholder="최종 경쟁률 기준" />
+        <InputField label="점공 참여 인원" name="revealedCount" value={inputs.revealedCount} onChange={handleChange} placeholder="현재 점공 리포트 기준" />
+        <InputField label="나의 점공 등수" name="myRank" value={inputs.myRank} onChange={handleChange} placeholder="예: 12" />
         
         <div className="mt-2 pt-4 border-t border-gray-100 bg-gray-50 p-3 rounded-lg">
           <label className="block text-gray-700 text-sm font-bold mb-1 flex items-center gap-2">
             <Clock size={16} className="text-indigo-500"/> 시간 반영 가중치 설정
           </label>
-          <p className="text-xs text-gray-500 mb-2">
-            1월 1일 이후 시간이 지날수록 미점공자의 위협도를 자동으로 낮춥니다.<br/>
-            (직접 입력 시 자동 계산 무시)
-          </p>
-          <input
-            type="number"
-            name="weight"
-            value={inputs.weight}
-            onChange={handleChange}
-            step="0.1"
-            min="0.1"
-            max="1.0"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-            placeholder="자동 계산 (권장)"
-          />
+          <input type="number" name="weight" value={inputs.weight} onChange={handleChange} step="0.1" min="0.1" max="1.0" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm" placeholder="자동 계산 (권장)" />
         </div>
       </div>
 
       {error && (
         <div className="mt-4 p-3 bg-red-50 text-red-700 rounded-lg text-sm flex items-center gap-2">
-          <AlertCircle size={16} />
-          {error}
+          <AlertCircle size={16} /> {error}
         </div>
       )}
 
-      <button
-        onClick={handleSubmit}
-        className="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] shadow-lg flex justify-center items-center gap-2"
-      >
-        <Calculator size={20} />
-        분석 및 저장하기
+      <button onClick={handleSubmit} className="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg flex justify-center items-center gap-2">
+        <Calculator size={20} /> 분석 및 저장하기
       </button>
-      
-      <div className="mt-3 flex justify-center text-xs text-gray-400 items-center gap-1">
-        <Save size={12} /> 계산 시 자동으로 저장소에 기록됩니다.
-      </div>
     </div>
   );
 };
 
 // ==========================================
-// 3. 결과 시각화 컴포넌트
+// 3. 결과 시각화 컴포넌트 (공유 기능 제거)
 // ==========================================
 const ResultView = ({ result, inputs }) => {
   if (!result) return (
@@ -279,16 +243,17 @@ const ResultView = ({ result, inputs }) => {
       <div className="text-6xl mb-6 opacity-20">📊</div>
       <h3 className="text-xl font-bold text-gray-400">데이터를 입력해주세요</h3>
       <p className="text-gray-400 mt-2 text-sm">
-        대학/학과 정보를 입력하고 계산하면<br/>해당 내용이 목록에 저장됩니다.
+        추합 인원까지 고려한 정밀 분석 결과를<br/>제공해 드립니다.
       </p>
     </div>
   );
 
-  const { ranks, probability, metrics } = result;
+  const { ranks, probability, metrics, waitingNum } = result;
   const today = new Date().toLocaleDateString();
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md border border-indigo-50 h-full flex flex-col">
+      {/* Header with No Share Button */}
       <div className="flex items-center justify-between mb-4 border-b pb-4">
         <div className="flex items-center gap-2">
           <TrendingUp className="text-indigo-600" size={24} />
@@ -299,7 +264,6 @@ const ResultView = ({ result, inputs }) => {
         </div>
       </div>
 
-      {/* 학교 정보 표시 */}
       {(inputs.university || inputs.department) && (
         <div className="mb-4 text-center">
           <h3 className="text-lg font-bold text-gray-800">
@@ -308,23 +272,20 @@ const ResultView = ({ result, inputs }) => {
         </div>
       )}
       
-      {/* 메인 결과 카드 */}
       <div className={`p-6 rounded-2xl text-center mb-6 border-2 ${probability.bgColor} ${probability.color.replace('text', 'border').replace('700', '200')}`}>
         <p className="text-sm text-gray-600 font-semibold mb-2">최종 예상 등수 (Realistic)</p>
         <div className="text-6xl font-extrabold text-indigo-900 mb-2 tracking-tighter">
           {ranks.realistic}
           <span className="text-2xl font-normal text-gray-400 ml-1">등</span>
         </div>
-        <div className={`text-lg font-bold inline-flex items-center gap-1 ${probability.color}`}>
-          {probability.score >= 80 ? <CheckCircle2 size={18}/> : <AlertTriangle size={18}/>}
-          {probability.label}
+        <div className={`text-xl font-bold inline-flex items-center gap-2 ${probability.color} bg-white px-4 py-1 rounded-full shadow-sm`}>
+          {waitingNum}
         </div>
-        <p className="text-xs text-gray-500 mt-3 bg-white/50 inline-block px-3 py-1 rounded-full">
-           모집인원 {inputs.quota}명 기준 (충원율 포함 고려)
+        <p className="text-xs text-gray-500 mt-3 font-medium">
+           {probability.label}
         </p>
       </div>
 
-      {/* 상세 지표 테이블 */}
       <div className="space-y-6 flex-grow">
         <div>
           <h3 className="font-semibold text-gray-700 text-sm mb-3 flex items-center gap-1">
@@ -354,26 +315,18 @@ const ResultView = ({ result, inputs }) => {
               <span className="font-mono font-bold">{metrics.competitionRate} : 1</span>
             </li>
             <li className="flex justify-between items-center">
-              <span>점공 참여율</span>
-              <span className="font-mono font-bold">{metrics.revealedRatio}%</span>
-            </li>
-            <li className="flex justify-between items-center border-t border-gray-200 pt-2 mt-2">
-              <span className="flex items-center gap-1"><Calendar size={12}/> 점공 경과일 (1/1~)</span>
-              <span className="font-mono font-bold text-indigo-600">D+{metrics.daysPassed}</span>
+              <span>적용된 추합 인원</span>
+              <span className="font-mono font-bold text-indigo-600">+{metrics.additionalPasses}명</span>
             </li>
             <li className="flex justify-between items-center">
-              <span>시간 보정 감소율</span>
-              <span className="font-mono font-bold text-blue-600">-{metrics.timeDecayPercent}%</span>
+              <span>예상 합격 최종등수(Cut)</span>
+              <span className="font-mono font-bold text-blue-600">{metrics.maxRank}등</span>
             </li>
             <li className="flex justify-between items-center bg-white p-2 rounded border border-indigo-100 mt-1">
               <span className="font-bold text-indigo-900">최종 적용 가중치(w)</span>
               <span className="font-mono font-bold text-indigo-900">{metrics.appliedWeight}</span>
             </li>
           </ul>
-        </div>
-        
-        <div className="text-xs text-gray-400 mt-2 leading-relaxed text-center">
-           * 1월 1일 이후 시간이 지날수록 실제 지원자 중 미점공자의 비율이 낮아진다고 가정하여 가중치를 소폭 하향 조정합니다.
         </div>
       </div>
     </div>
@@ -385,23 +338,14 @@ const ResultView = ({ result, inputs }) => {
 // ==========================================
 function App() {
   const initialInputs = {
-    university: '',
-    department: '',
-    quota: '',
-    realApplicants: '',
-    revealedCount: '',
-    myRank: '',
-    weight: ''
+    university: '', department: '', quota: '', realApplicants: '', revealedCount: '', myRank: '', weight: '', additionalPasses: ''
   };
 
-  // 현재 입력 중인 데이터 State
   const [inputs, setInputs] = useState(() => {
-    // 1. 마지막 작업 세션이 있다면 불러오기 (임시 저장용)
     const lastSession = localStorage.getItem('jeomgong_current_session');
     return lastSession ? JSON.parse(lastSession) : initialInputs;
   });
 
-  // 저장된 리스트 State
   const [savedList, setSavedList] = useState(() => {
     const saved = localStorage.getItem('jeomgong_list');
     return saved ? JSON.parse(saved) : [];
@@ -409,51 +353,39 @@ function App() {
   
   const [result, setResult] = useState(null);
 
-  // inputs 변경 시 '현재 세션'에만 임시 저장 (새로고침 대비)
-  useEffect(() => {
-    localStorage.setItem('jeomgong_current_session', JSON.stringify(inputs));
-  }, [inputs]);
-
-  // savedList 변경 시 영구 저장소 업데이트
-  useEffect(() => {
-    localStorage.setItem('jeomgong_list', JSON.stringify(savedList));
-  }, [savedList]);
+  useEffect(() => { localStorage.setItem('jeomgong_current_session', JSON.stringify(inputs)); }, [inputs]);
+  useEffect(() => { localStorage.setItem('jeomgong_list', JSON.stringify(savedList)); }, [savedList]);
 
   const handleCalculate = () => {
-    // 1. 계산 실행
+    // 입력값을 계산 함수로 전달
     const calcInputs = {
       ...inputs,
       quota: parseFloat(inputs.quota),
       realApplicants: parseFloat(inputs.realApplicants),
       revealedCount: parseFloat(inputs.revealedCount),
       myRank: parseFloat(inputs.myRank),
+      // 추합인원(additionalPasses)는 calculatePrediction 내부에서 처리됨 (입력 안하면 자동 계산)
     };
     const calcResult = calculatePrediction(calcInputs);
     setResult(calcResult);
 
-    // 2. 저장소 업데이트 (대학/학과가 입력된 경우에만)
+    // 대학/학과 입력 시 저장 목록 업데이트
     if (inputs.university && inputs.department) {
       const now = new Date();
       const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${now.getMinutes() < 10 ? '0' + now.getMinutes() : now.getMinutes()}`;
       
-      const newItem = {
-        ...inputs,
-        lastUpdated: timestamp
-      };
+      const newItem = { ...inputs, lastUpdated: timestamp };
 
       setSavedList(prevList => {
-        // 동일한 학교/학과가 있는지 찾기
         const existingIndex = prevList.findIndex(
           item => item.university === inputs.university && item.department === inputs.department
         );
 
         if (existingIndex >= 0) {
-          // 있으면 업데이트 (덮어쓰기)
           const newList = [...prevList];
           newList[existingIndex] = newItem;
           return newList;
         } else {
-          // 없으면 새로 추가 (배열 맨 앞에 추가)
           return [newItem, ...prevList];
         }
       });
@@ -461,27 +393,18 @@ function App() {
   };
 
   const handleLoad = (item) => {
-    // 선택한 데이터 불러오기 (lastUpdated 필드 등은 제외하고 입력값만)
-    setInputs({
-      university: item.university,
-      department: item.department,
-      quota: item.quota,
-      realApplicants: item.realApplicants,
-      revealedCount: item.revealedCount,
-      myRank: item.myRank,
-      weight: item.weight
-    });
-    setResult(null); // 입력값이 바뀌었으므로 결과창 초기화
+    setInputs({ ...item });
+    setResult(null);
   };
 
   const handleDelete = (index) => {
-    if (window.confirm('선택한 저장 데이터를 삭제하시겠습니까?')) {
+    if (window.confirm('삭제하시겠습니까?')) {
       setSavedList(prev => prev.filter((_, i) => i !== index));
     }
   };
 
   const handleReset = () => {
-    if (window.confirm('현재 입력된 내용을 모두 지우시겠습니까?')) {
+    if (window.confirm('모두 지우시겠습니까?')) {
       setInputs(initialInputs);
       setResult(null);
       localStorage.removeItem('jeomgong_current_session');
@@ -496,44 +419,29 @@ function App() {
             🎓 점수공개 계산기
           </h1>
           <p className="text-indigo-200 text-sm mt-2 font-light">
-            AI 기반 점수공개 예측 서비스 (자동저장/날짜연동/다중저장)
+            AI 기반 점수공개 예측 서비스
           </p>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-          {/* 입력 폼 */}
           <div className="w-full">
             <InputForm 
-              inputs={inputs} 
-              setInputs={setInputs} 
-              onCalculate={handleCalculate} 
-              onReset={handleReset}
-              savedList={savedList}
-              onLoad={handleLoad}
-              onDelete={handleDelete}
+              inputs={inputs} setInputs={setInputs} onCalculate={handleCalculate} onReset={handleReset}
+              savedList={savedList} onLoad={handleLoad} onDelete={handleDelete}
             />
-            
             <div className="mt-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 text-sm text-gray-600">
-              <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
-                💡 사용 가이드
-              </h3>
+              <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">💡 꿀팁</h3>
               <ul className="list-disc list-inside space-y-1 ml-1 text-xs sm:text-sm">
-                <li><strong>계산하기</strong>를 누르면 학교/학과별로 데이터가 자동 저장됩니다.</li>
-                <li>같은 학교/학과의 데이터를 다시 계산하면 기존 내역이 업데이트됩니다.</li>
-                <li><strong>불러오기</strong> 메뉴에서 저장해둔 데이터를 쉽게 가져올 수 있습니다.</li>
-                <li>1월 1일 이후 경과일에 따라 예측 가중치가 자동 보정됩니다.</li>
+                <li><strong>예상 추합 인원</strong>을 입력하면 합격 커트라인을 더 정확히 계산합니다. (미입력시 모집인원의 절반으로 계산)</li>
+                <li>'예상 등수'가 모집인원보다 크면 <strong>예비 번호</strong>를 보여줍니다.</li>
+                <li>'계산하기'를 누르면 입력한 내용이 자동으로 저장됩니다.</li>
               </ul>
             </div>
           </div>
-
-          {/* 결과 출력 */}
           <div className="w-full md:min-h-[600px]">
-             <ResultView 
-               result={result} 
-               inputs={inputs}
-             />
+             <ResultView result={result} inputs={inputs} />
           </div>
         </div>
       </main>
