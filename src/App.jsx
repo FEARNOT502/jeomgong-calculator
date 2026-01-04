@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 // ==========================================
-// 1. 핵심 알고리즘 (계산 과정 추적 로직 추가)
+// 1. 핵심 알고리즘 (계산 과정 추적 로직)
 // ==========================================
 const calculatePrediction = (inputs) => {
   const { quota, realApplicants, revealedCount, myRank, weight, additionalPasses } = inputs;
@@ -57,12 +57,12 @@ const calculatePrediction = (inputs) => {
   let probability = { label: "분석 불가", color: "text-gray-500", bgColor: "bg-gray-100", score: 0 };
 
   if (waitingNum <= 0) {
-    if (realisticRank <= quota * 0.8) probability = { label: "최초합 확실 (Very Safe)", color: "text-blue-700", bgColor: "bg-blue-50", score: 95 };
-    else probability = { label: "최초합 적정 (Safe)", color: "text-green-700", bgColor: "bg-green-50", score: 85 };
+    if (realisticRank <= quota * 0.8) probability = { label: "최초합 확실", color: "text-blue-700", bgColor: "bg-blue-50", score: 95 };
+    else probability = { label: "최초합 적정", color: "text-green-700", bgColor: "bg-green-50", score: 85 };
   } else {
-    if (realisticRank <= maxRank * 0.8) probability = { label: "추합 유력 (Probable)", color: "text-yellow-700", bgColor: "bg-yellow-50", score: 65 };
-    else if (realisticRank <= maxRank) probability = { label: "추합권 (Risky)", color: "text-orange-700", bgColor: "bg-orange-50", score: 45 };
-    else probability = { label: "불합격 유력 (Danger)", color: "text-red-700", bgColor: "bg-red-50", score: 15 };
+    if (realisticRank <= maxRank * 0.8) probability = { label: "추합 유력", color: "text-yellow-700", bgColor: "bg-yellow-50", score: 65 };
+    else if (realisticRank <= maxRank) probability = { label: "추합권", color: "text-orange-700", bgColor: "bg-orange-50", score: 45 };
+    else probability = { label: "불합격 유력", color: "text-red-700", bgColor: "bg-red-50", score: 15 };
   }
 
   return {
@@ -208,12 +208,12 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
       
       <div className="grid grid-cols-1 gap-y-1">
         <div className="grid grid-cols-2 gap-3 mb-2">
-          <InputField label="목표 대학" name="university" type="text" value={inputs.university} onChange={handleChange} placeholder="예: 한국대" />
+          <InputField label="목표 대학" name="university" type="text" value={inputs.university} onChange={handleChange} placeholder="예: 서울대" />
           <InputField label="모집 단위(학과)" name="department" type="text" value={inputs.department} onChange={handleChange} placeholder="예: 경영학과" />
         </div>
 
         <InputField label="모집 인원 (명)" name="quota" value={inputs.quota} onChange={handleChange} placeholder="예: 35" />
-        <InputField label="예상 추합 인원 (명)" name="additionalPasses" value={inputs.additionalPasses} onChange={handleChange} placeholder="예: 15" subtext="입력 안 하면 모집 인원의 50%로 자동 계산" />
+        <InputField label="예상 추합 인원 (명)" name="additionalPasses" value={inputs.additionalPasses} onChange={handleChange} placeholder="예: 15" subtext="미입력시 모집 인원의 50%로 계산" />
         <InputField label="전체 지원자 수" name="realApplicants" value={inputs.realApplicants} onChange={handleChange} placeholder="최종 경쟁률 기준" />
         <InputField label="점공 참여 인원" name="revealedCount" value={inputs.revealedCount} onChange={handleChange} placeholder="현재 점공 리포트 기준" />
         <InputField label="나의 점공 등수" name="myRank" value={inputs.myRank} onChange={handleChange} placeholder="예: 12" />
@@ -279,7 +279,7 @@ const ResultView = ({ result, inputs }) => {
       )}
       
       <div className={`p-6 rounded-2xl text-center mb-6 border-2 ${probability.bgColor} ${probability.color.replace('text', 'border').replace('700', '200')}`}>
-        <p className="text-sm text-gray-600 font-semibold mb-2">최종 예상 등수 (Realistic)</p>
+        <p className="text-sm text-gray-600 font-semibold mb-2">최종 예상 등수</p>
         <div className="text-6xl font-extrabold text-indigo-900 mb-2 tracking-tighter">
           {ranks.realistic}
           <span className="text-2xl font-normal text-gray-400 ml-1">등</span>
@@ -326,11 +326,21 @@ const ResultView = ({ result, inputs }) => {
           {showDetail && (
             <div className="bg-gray-50 p-4 rounded-xl text-sm space-y-3 mb-4 border border-gray-200 animate-in fade-in slide-in-from-top-2">
               <div className="space-y-2">
-                 <p className="text-xs font-bold text-gray-500 border-b pb-1">1. 가중치($w$) 산출</p>
+                 <p className="text-xs font-bold text-gray-500 border-b pb-1">1. 가중치 산출</p>
                  <div className="flex justify-between text-gray-600">
                    <span>기본 가중치 (경쟁률 {metrics.competitionRate}:1)</span>
                    <span className="font-mono">{breakdown.isAutoWeight ? breakdown.baseWeight : '수동입력'}</span>
                  </div>
+
+                 {/* [추가된 부분] 가중치 산출 과정 표시 */}
+                 {breakdown.isAutoWeight && (
+                    <div className="flex justify-end">
+                       <div className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded mb-1 border border-gray-200">
+                         0.7 - (0.15 × ln({metrics.competitionRate})) ≈ {breakdown.baseWeight}
+                       </div>
+                    </div>
+                 )}
+
                  <div className="flex justify-between text-gray-600">
                    <span>시간 경과 (D+{breakdown.daysPassed})</span>
                    <span className="font-mono text-red-500">-{breakdown.timeDecayPercent}% 감점</span>
@@ -342,13 +352,13 @@ const ResultView = ({ result, inputs }) => {
               </div>
 
               <div className="space-y-2 pt-2">
-                 <p className="text-xs font-bold text-gray-500 border-b pb-1">2. 숨은 고수 예측</p>
+                 <p className="text-xs font-bold text-gray-500 border-b pb-1">2. 미점공 인원 예측</p>
                  <div className="flex justify-between text-gray-600 text-xs">
-                   <span>미점공 인원(A-V)</span>
+                   <span>미점공 인원</span>
                    <span className="font-mono">{breakdown.unrevealedCount}명</span>
                  </div>
                  <div className="flex justify-between text-gray-600 text-xs">
-                   <span>내 상위 비율(r/V)</span>
+                   <span>나의 상위 비율</span>
                    <span className="font-mono">{breakdown.myRatioPercent}%</span>
                  </div>
                  <div className="bg-white border p-2 rounded text-xs text-center text-gray-600 font-mono">
@@ -367,7 +377,7 @@ const ResultView = ({ result, inputs }) => {
                  </div>
                  <div className="flex justify-center text-gray-400 text-xs">+</div>
                  <div className="flex justify-between items-center">
-                   <span>숨은 고수(예측)</span>
+                   <span>미점공자 중 상위 인원수(예측)</span>
                    <span className="font-mono font-bold">{breakdown.hiddenSuperiors}명</span>
                  </div>
                  <div className="border-t border-gray-300 my-1"></div>
@@ -489,7 +499,7 @@ function App() {
             🎓 점수공개 계산기
           </h1>
           <p className="text-indigo-200 text-sm mt-2 font-light">
-            AI 기반 점수공개 예측 서비스 (상세 분석 모드 / 다중저장)
+            AI 기반 점수공개 예측 서비스
           </p>
         </div>
       </header>
@@ -502,10 +512,10 @@ function App() {
               savedList={savedList} onLoad={handleLoad} onDelete={handleDelete}
             />
             <div className="mt-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 text-sm text-gray-600">
-              <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">💡 꿀팁</h3>
+              <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">💡</h3>
               <ul className="list-disc list-inside space-y-1 ml-1 text-xs sm:text-sm">
-                <li><strong>예상 추합 인원</strong>을 입력하면 합격 커트라인을 더 정확히 계산합니다. (안 쓰면 모집인원 절반으로 자동 계산)</li>
-                <li>결과창 하단의 <strong>분석 상세 데이터</strong>를 클릭하면 복잡한 계산 과정을 한눈에 볼 수 있습니다.</li>
+                <li><strong>예상 추합 인원</strong>을 입력하면 합격 커트라인을 더 정확히 계산합니다. (미입력시 모집인원의 절반으로 계산)</li>
+                <li>결과창 하단의 <strong>분석 상세 데이터</strong>를 클릭하면 계산 과정을 볼 수 있습니다.</li>
               </ul>
             </div>
           </div>
