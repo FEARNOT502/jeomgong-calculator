@@ -1,8 +1,139 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X } from 'lucide-react';
+import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X, BrainCircuit, Key, Save } from 'lucide-react';
 
 // ==========================================
-// 0. 계산 과정 설명 모달 컴포넌트 (수정됨)
+// 설정: Gemini 모델 변경
+// ==========================================
+// 배포 후 더 성능 좋은 모델을 사용하려면 아래 값을 변경하세요.
+// 예: "gemini-1.5-pro", "gemini-pro" 등 (Google AI Studio에서 지원하는 모델명 확인 필요)
+const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"; 
+
+// ==========================================
+// 0. Gemini API 호출 함수 (동적 키 사용)
+// ==========================================
+const getAiAdjustment = async (inputs, userApiKey) => {
+  const { university, department, quota, realApplicants, revealedCount, myRank, calcDate, calcHour } = inputs;
+  
+  if (!university || !userApiKey) return { factor: 0, reason: '' };
+
+  const competitionRate = (realApplicants / quota).toFixed(2);
+  const revealedRatio = ((revealedCount / realApplicants) * 100).toFixed(1);
+  
+  let analysisTimeStr = "Current Time";
+  if (calcDate && calcHour !== '') {
+    analysisTimeStr = `${calcDate} ${calcHour}:00`;
+  }
+
+  const prompt = `
+    Context: Advanced Analysis of South Korean University Admission Score Revelation (Jeomgong).
+    Task: Calculate a precise "weight correction factor" (w_adj) for the unrevealed applicant pool based on ALL input factors including analysis time.
+    
+    [Input Data]
+    - University: ${university}
+    - Department: ${department}
+    - Quota: ${quota}
+    - Total Applicants: ${realApplicants} (Rate: ${competitionRate}:1)
+    - Revealed Count: ${revealedCount} (Ratio: ${revealedRatio}%)
+    - My Rank: ${myRank}
+    - Analysis Time Point: ${analysisTimeStr}
+
+    [Analysis Logic]
+    1. **Jeomgong Pattern & Time:** - Early period + Low ratio: Natural.
+       - Late period + Low ratio: High probability of hidden high scorers (Dark matter). -> Conservative (+)
+    2. **Department Characteristics:**
+       - "Mun-Sa-Cheol" (Humanities) or unpopular majors at top schools: Often safety picks. 
+       - Medical/Engineering: High scorers tend to stay.
+       - Consider specific university dynamics (e.g., Jigeoguk, Education Univ).
+    3. **Focus:**
+       - **IGNORE** dropout rates (ghosts leaving for other schools) or waitlist chances.
+       - **FOCUS ONLY** on estimating the *current* rank by predicting how many unrevealed applicants are ranked higher than me.
+
+    [Output Constraints - STRICT]
+    - **Range:** Keep factor strictly between **-0.09 and +0.09**.
+    - **Logic:**
+      - **Positive (+):** Unrevealed pool is threatening (Hidden High Scorers). Conservative prediction.
+      - **Negative (-):** Unrevealed pool is likely weaker. Optimistic prediction.
+    
+    Output Requirement:
+    Return ONLY a raw JSON object.
+    Structure: { "factor": number, "reason": "Short explanation in Korean (under 50 chars) focusing on Jeomgong pattern, time & ratio." }
+  `;
+
+  try {
+    // [MODIFIED] 상단에 정의된 GEMINI_MODEL 상수를 사용하여 URL 구성
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${userApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        }),
+      }
+    );
+
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+
+    const data = await response.json();
+    const text = data.candidates[0].content.parts[0].text;
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Gemini Analysis Error:", error);
+    return { factor: 0, reason: "분석 실패 (API 키 확인 필요)" };
+  }
+};
+
+// ==========================================
+// 0.1 API Key 설정 모달
+// ==========================================
+const ApiKeyModal = ({ onClose, apiKey, setApiKey }) => {
+  const [tempKey, setTempKey] = useState(apiKey);
+
+  const handleSave = () => {
+    setApiKey(tempKey);
+    localStorage.setItem('gemini_api_key', tempKey);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative animate-in zoom-in-95">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+          <X size={20} />
+        </button>
+        <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <Key className="text-indigo-600" /> API 키 설정
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          AI 분석 기능을 사용하려면 Google Gemini API 키가 필요합니다.<br/>
+          키는 브라우저에만 저장되며 서버로 전송되지 않습니다.
+        </p>
+        <input 
+          type="password" 
+          value={tempKey}
+          onChange={(e) => setTempKey(e.target.value)}
+          placeholder="AIzaSy..."
+          className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm"
+        />
+        <div className="flex justify-end gap-2">
+          <button 
+            onClick={handleSave}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2"
+          >
+            <Save size={16} /> 저장하기
+          </button>
+        </div>
+        <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-400">
+          * API 키 발급: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-indigo-500 underline">Google AI Studio</a>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 0.2 계산 과정 설명 모달 컴포넌트
 // ==========================================
 const LogicModal = ({ onClose }) => {
   useEffect(() => {
@@ -18,7 +149,6 @@ const LogicModal = ({ onClose }) => {
       onClick={onClose}
     >
       <div 
-        // [MODIFIED] max-w-2xl -> max-w-4xl로 변경하여 너비 확장
         className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-y-auto relative animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
@@ -114,6 +244,18 @@ const LogicModal = ({ onClose }) => {
                 </div>
               </div>
             </section>
+            
+            <section>
+              <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <span className="bg-violet-100 text-violet-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">AI</span>
+                AI 맞춤 보정 (Gemini Analysis)
+              </h3>
+              <div className="bg-violet-50 p-4 rounded-xl border border-violet-100 text-sm space-y-2">
+                <p><strong>역할:</strong> 입력된 모든 데이터(대학/학과, 경쟁률, 점공률, 순위, 분석 시점)를 종합하여 미세 보정값(-0.09 ~ +0.09)을 산출합니다.</p>
+                <p><strong>원리:</strong> 단순 통계로 파악하기 힘든 대학별 입시 역학(학과 특성, 점공 패턴, 분석 시점의 적절성 등)을 반영하여 숨겨진 고득점자의 존재 가능성을 추론합니다.</p>
+                <p className="text-violet-700 font-semibold">최초합 여부나 추합 가능성이 아닌, '현재 시점에서의 정확한 등수'를 예측하는 데 집중합니다.</p>
+              </div>
+            </section>
           </div>
           
           <div className="mt-8 text-center">
@@ -131,9 +273,9 @@ const LogicModal = ({ onClose }) => {
 };
 
 // ==========================================
-// 1. 핵심 알고리즘 (날짜/시간 입력 반영)
+// 1. 핵심 알고리즘 (AI 보정치 반영)
 // ==========================================
-const calculatePrediction = (inputs) => {
+const calculatePrediction = (inputs, aiCorrectionData = { factor: 0, reason: '' }) => {
   const { quota, realApplicants, revealedCount, myRank, additionalPasses, calcDate, calcHour } = inputs;
   
   if (revealedCount > realApplicants) throw new Error("점공 인원이 전체 지원자보다 많을 수 없습니다.");
@@ -143,44 +285,43 @@ const calculatePrediction = (inputs) => {
   const competitionRate = realApplicants / quota;
   const revealedRatio = revealedCount / realApplicants; // 점공 비율 (0.0 ~ 1.0)
   
-  // [1] 날짜 및 시간 기반 로직 (사용자 입력 기준)
+  // [1] 날짜 및 시간 기반 로직
   let now;
   if (calcDate && calcHour !== '') {
     const [y, m, d] = calcDate.split('-').map(Number);
-    // 월은 0-index이므로 m-1
     now = new Date(y, m - 1, d, parseInt(calcHour));
   } else {
-    now = new Date(); // Fallback (비정상 입력 시 현재 시간)
+    now = new Date();
   }
 
   const currentYear = now.getFullYear();
-  const startDate = new Date(currentYear, 0, 1); // 1월 1일 00:00
-  // 시간 차이가 음수(1월 1일 이전)가 나오지 않도록 처리
+  const startDate = new Date(currentYear, 0, 1);
   const timeDiff = Math.max(0, now - startDate);
   
   const totalHoursPassed = Math.floor(timeDiff / (1000 * 60 * 60));
   const daysPassed = Math.floor(totalHoursPassed / 24);
-  const hoursLeft = totalHoursPassed % 24;
-  
-  // 시간 경과 보정 (Time Decay): 하루에 약 2% 감소, 최대 30%
+  const hoursLeft = totalHoursPassed % 24; 
   const timeDecayFactor = Math.min(0.3, totalHoursPassed * (0.02 / 24)); 
 
-  // [2] 기본 가중치 산출 (항상 자동 계산)
+  // [2] 기본 가중치 산출
   const safeCompetitionRate = Math.max(1.1, competitionRate);
-  // 기본 공식: 0.7 - 0.15 * ln(경쟁률)
   let w = 0.7 - (0.15 * Math.log(safeCompetitionRate));
   
-  // 점공 비율 보정 (Revealed Ratio Correction)
+  // 점공 비율 보정
   const ratioCorrection = (0.5 - revealedRatio) * 0.2;
   w = w + ratioCorrection;
 
-  // 점공 초반(3일 이내) 실수 유입 보정
+  // 점공 초반 보정
   if (daysPassed <= 3) {
     w = Math.max(w, 0.35); 
   }
 
-  const baseWeight = Math.max(0.2, w); // 최소 0.2 안전장치
-  const isAutoWeight = true; // 수동 모드 제거됨
+  // [NEW] AI 특성 분석 보정 추가
+  const aiFactor = aiCorrectionData.factor || 0;
+  w = w + aiFactor;
+
+  const baseWeight = Math.max(0.15, w); // 최소값 약간 하향 조정 (최상위권 반영 위해)
+  const isAutoWeight = true;
   
   // [3] 시나리오별 가중치 설정
   const weights = {
@@ -190,10 +331,10 @@ const calculatePrediction = (inputs) => {
   };
 
   // [4] 공통 변수 계산
-  const unrevealedCount = realApplicants - revealedCount; // 미점공 인원
-  const rankRatio = myRank / revealedCount; // 내 상위 비율
+  const unrevealedCount = realApplicants - revealedCount;
+  const rankRatio = myRank / revealedCount;
 
-  // [5] 시나리오별 등수 계산 (반올림 로직 적용)
+  // [5] 시나리오별 등수 계산
   const calculateRank = (w) => {
     const hiddenSuperiors = unrevealedCount * rankRatio * w;
     return myRank + Math.round(hiddenSuperiors);
@@ -246,7 +387,6 @@ const calculatePrediction = (inputs) => {
       additionalPasses: userAdditionalPasses,
       maxRank: Math.floor(quota + userAdditionalPasses)
     },
-    // 상세 분석용 데이터
     breakdown: {
       isAutoWeight,
       baseWeight: baseWeight.toFixed(3),
@@ -256,7 +396,9 @@ const calculatePrediction = (inputs) => {
       timeDecayPercent: (timeDecayFactor * 100).toFixed(2),
       unrevealedCount,
       myRatioPercent: (rankRatio * 100).toFixed(2),
-      ratioCorrection: ((0.5 - revealedRatio) * 0.2).toFixed(3)
+      ratioCorrection: ((0.5 - revealedRatio) * 0.2).toFixed(3),
+      aiFactor: aiFactor.toFixed(3),
+      aiReason: aiCorrectionData.reason
     }
   };
 };
@@ -282,7 +424,7 @@ const InputField = ({ label, name, value, onChange, placeholder, subtext, type =
   </div>
 );
 
-const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad, onDelete }) => {
+const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad, onDelete, isAiLoading, apiKey }) => {
   const [error, setError] = useState(null);
   const [isLoadOpen, setIsLoadOpen] = useState(false);
 
@@ -386,7 +528,6 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         <InputField label="점공 참여 인원" name="revealedCount" value={inputs.revealedCount} onChange={handleChange} placeholder="현재 점공 리포트 기준" />
         <InputField label="나의 점공 등수" name="myRank" value={inputs.myRank} onChange={handleChange} placeholder="예: 12" />
         
-        {/* [NEW] 날짜 및 시간 입력 필드로 변경 */}
         <div className="mt-2 pt-4 border-t border-gray-100 bg-gray-50 p-3 rounded-lg">
           <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center gap-2">
             <Clock size={16} className="text-indigo-500"/> 분석 시점 설정
@@ -412,9 +553,6 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
               <span className="absolute right-3 top-2 text-gray-500 text-sm">시</span>
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2 ml-1">
-             * 설정한 시점을 기준으로 미점공자가 보정됩니다.
-          </p>
         </div>
       </div>
 
@@ -424,8 +562,28 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         </div>
       )}
 
-      <button onClick={handleSubmit} className="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg flex justify-center items-center gap-2">
-        <Calculator size={20} /> 분석 및 저장하기
+      {/* API Key 경고 (키가 없을 때만 표시) */}
+      {inputs.university && inputs.department && !apiKey && (
+        <div className="mt-2 p-2 bg-yellow-50 text-yellow-700 rounded text-xs flex items-center gap-2">
+          <Key size={14} /> AI 분석을 위해 우측 상단 열쇠 아이콘을 눌러 키를 설정하세요.
+        </div>
+      )}
+
+      <button 
+        onClick={handleSubmit} 
+        disabled={isAiLoading}
+        className="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+      >
+        {isAiLoading ? (
+          <>
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            대학 성향 분석중...
+          </>
+        ) : (
+          <>
+            <Calculator size={20} /> 분석 및 저장하기
+          </>
+        )}
       </button>
     </div>
   );
@@ -434,7 +592,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
 // ==========================================
 // 3. 결과 시각화 컴포넌트
 // ==========================================
-const ResultView = ({ result, inputs }) => {
+const ResultView = ({ result, inputs, isAiLoading }) => {
   const [showDetail, setShowDetail] = useState(false);
   const [activeScenario, setActiveScenario] = useState('realistic');
 
@@ -442,12 +600,22 @@ const ResultView = ({ result, inputs }) => {
     if (result) setActiveScenario('realistic');
   }, [result]);
 
+  if (isAiLoading) return (
+     <div className="bg-white p-12 rounded-xl shadow-md border border-dashed border-indigo-200 text-center h-full flex flex-col justify-center items-center animate-pulse">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+      <h3 className="text-xl font-bold text-indigo-900">AI 대학 성향 분석중...</h3>
+      <p className="text-indigo-600 mt-2 text-sm">
+        {inputs.university} {inputs.department}의<br/>점공 패턴과 군별 특성을 분석 중입니다.
+      </p>
+    </div>
+  );
+
   if (!result) return (
     <div className="bg-white p-12 rounded-xl shadow-md border border-dashed border-gray-300 text-center h-full flex flex-col justify-center items-center">
       <div className="text-6xl mb-6 opacity-20">📊</div>
       <h3 className="text-xl font-bold text-gray-400">데이터를 입력해주세요</h3>
       <p className="text-gray-400 mt-2 text-sm">
-        시나리오별 분석 결과를<br/>확인할 수 있습니다.
+        시나리오별 분석 결과와<br/>AI 맞춤 보정 결과를 확인하세요.
       </p>
     </div>
   );
@@ -566,9 +734,8 @@ const ResultView = ({ result, inputs }) => {
                    <>
                      <div className="flex justify-between text-gray-600">
                        <span>로그 공식 (경쟁률 {metrics.competitionRate}:1)</span>
-                       <span className="font-mono">{breakdown.isAutoWeight ? (parseFloat(breakdown.baseWeight) - parseFloat(breakdown.ratioCorrection)).toFixed(3) : '수동'}</span>
+                       <span className="font-mono">{breakdown.isAutoWeight ? (parseFloat(breakdown.baseWeight) - parseFloat(breakdown.ratioCorrection) - parseFloat(breakdown.aiFactor)).toFixed(3) : '수동'}</span>
                      </div>
-                     {/* [ADDED] 로그 공식 계산 과정 설명 */}
                      {breakdown.isAutoWeight && (
                         <div className="flex justify-end mb-1">
                            <div className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
@@ -592,8 +759,21 @@ const ResultView = ({ result, inputs }) => {
                           </div>
                         </>
                      )}
+
+                     <div className="flex justify-between text-gray-600 items-center">
+                       <span className="flex items-center gap-1">AI 보정 <BrainCircuit size={12} className="text-violet-500"/></span>
+                       <span className={`font-mono ${parseFloat(breakdown.aiFactor) > 0 ? 'text-red-500' : parseFloat(breakdown.aiFactor) < 0 ? 'text-blue-600' : 'text-gray-500'}`}>
+                         {parseFloat(breakdown.aiFactor) > 0 ? '+' : ''}{breakdown.aiFactor}
+                       </span>
+                     </div>
+                     {breakdown.aiReason && (
+                       <div className="text-[10px] text-violet-600 bg-violet-50 px-2 py-1 rounded text-right mb-1">
+                         {breakdown.aiReason}
+                       </div>
+                     )}
+
                      <div className="flex justify-between text-gray-600">
-                       <span>시간 경과 (D+{breakdown.daysPassed})</span>
+                       <span>시간 보정 (D+{breakdown.daysPassed})</span>
                        <span className="font-mono text-red-500">-{breakdown.timeDecayPercent}%</span>
                      </div>
                    </>
@@ -689,6 +869,12 @@ const getToday = () => {
 const getCurrentHour = () => new Date().getHours();
 
 function App() {
+  // API Key State 관리 (localStorage 연동)
+  const [apiKey, setApiKey] = useState(() => {
+    return localStorage.getItem('gemini_api_key') || '';
+  });
+  const [showKeyModal, setShowKeyModal] = useState(false);
+
   // [NEW] calcDate, calcHour 초기값 추가
   const initialInputs = {
     university: '', 
@@ -706,7 +892,6 @@ function App() {
     const lastSession = localStorage.getItem('jeomgong_current_session');
     if (lastSession) {
       const parsed = JSON.parse(lastSession);
-      // 세션을 불러오더라도 날짜/시간은 '현재'로 리셋 (사용자 요청 사항)
       return {
         ...parsed,
         calcDate: getToday(),
@@ -723,11 +908,12 @@ function App() {
   
   const [result, setResult] = useState(null);
   const [showLogicModal, setShowLogicModal] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   useEffect(() => { localStorage.setItem('jeomgong_current_session', JSON.stringify(inputs)); }, [inputs]);
   useEffect(() => { localStorage.setItem('jeomgong_list', JSON.stringify(savedList)); }, [savedList]);
 
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
     const calcInputs = {
       ...inputs,
       quota: parseFloat(inputs.quota),
@@ -735,9 +921,26 @@ function App() {
       revealedCount: parseFloat(inputs.revealedCount),
       myRank: parseFloat(inputs.myRank),
     };
-    const calcResult = calculatePrediction(calcInputs);
-    setResult(calcResult);
 
+    // 1. 기본 계산 결과
+    let tempResult = calculatePrediction(calcInputs);
+    setResult(tempResult);
+
+    // 2. AI 보정 실행 (대학/학과 입력 및 API 키 존재 시)
+    if (inputs.university || inputs.department) {
+      if (apiKey) {
+        setIsAiLoading(true);
+        // [MODIFIED] API 키를 인자로 전달
+        const aiData = await getAiAdjustment(calcInputs, apiKey);
+        
+        // AI 보정치 적용하여 재계산
+        const finalResult = calculatePrediction(calcInputs, aiData);
+        setResult(finalResult);
+        setIsAiLoading(false);
+      }
+    }
+
+    // 저장 로직
     if (inputs.university && inputs.department) {
       const now = new Date();
       const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${now.getMinutes() < 10 ? '0' + now.getMinutes() : now.getMinutes()}`;
@@ -761,7 +964,6 @@ function App() {
   };
 
   const handleLoad = (item) => {
-    // 저장된 값을 불러올 때, 날짜와 시간은 '현재(컴퓨터 시간)'로 강제 업데이트
     setInputs({ 
       ...item,
       calcDate: getToday(),
@@ -780,7 +982,7 @@ function App() {
     if (window.confirm('모두 지우시겠습니까?')) {
       setInputs({
         ...initialInputs,
-        calcDate: getToday(), // 리셋 시에도 현재 시간 유지
+        calcDate: getToday(), 
         calcHour: getCurrentHour()
       });
       setResult(null);
@@ -790,8 +992,9 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-gray-900 pb-12">
-      {/* 설명 모달 렌더링 */}
+      {/* 모달 렌더링 */}
       {showLogicModal && <LogicModal onClose={() => setShowLogicModal(false)} />}
+      {showKeyModal && <ApiKeyModal onClose={() => setShowKeyModal(false)} apiKey={apiKey} setApiKey={setApiKey} />}
 
       <header className="bg-indigo-900 text-white py-8 shadow-lg">
         <div className="max-w-5xl mx-auto px-6 relative">
@@ -805,14 +1008,24 @@ function App() {
               </p>
             </div>
             
-            <button 
-              onClick={() => setShowLogicModal(true)}
-              className="flex items-center gap-1.5 text-xs sm:text-sm bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-4 py-2 rounded-full transition-colors border border-indigo-700 shadow-sm"
-            >
-              <HelpCircle size={16} />
-              <span className="hidden sm:inline">계산과정 설명</span>
-              <span className="sm:hidden">설명</span>
-            </button>
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowKeyModal(true)}
+                className="flex items-center gap-1.5 text-xs sm:text-sm bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-2 rounded-full transition-colors border border-indigo-700 shadow-sm"
+                title="API 키 설정"
+              >
+                <Key size={16} />
+                <span className="hidden sm:inline">{apiKey ? '키 변경' : '키 설정'}</span>
+              </button>
+              <button 
+                onClick={() => setShowLogicModal(true)}
+                className="flex items-center gap-1.5 text-xs sm:text-sm bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-4 py-2 rounded-full transition-colors border border-indigo-700 shadow-sm"
+              >
+                <HelpCircle size={16} />
+                <span className="hidden sm:inline">계산과정 설명</span>
+                <span className="sm:hidden">설명</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -822,19 +1035,19 @@ function App() {
           <div className="w-full">
             <InputForm 
               inputs={inputs} setInputs={setInputs} onCalculate={handleCalculate} onReset={handleReset}
-              savedList={savedList} onLoad={handleLoad} onDelete={handleDelete}
+              savedList={savedList} onLoad={handleLoad} onDelete={handleDelete} isAiLoading={isAiLoading} apiKey={apiKey}
             />
             <div className="mt-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 text-sm text-gray-600">
               <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">💡 사용 안내</h3>
               <ul className="list-disc pl-4 space-y-1 text-xs sm:text-sm">
-                <li><strong>시나리오</strong>를 클릭하면 해당 시나리오의 계산 과정을 볼 수 있습니다.</li>
+                <li><strong>시나리오</strong>를 클릭하면 해당 시나리오의 상세 계산 과정을 볼 수 있습니다.</li>
                 <li>예상 추합 인원을 비워두면 모집인원의 50%로 계산합니다.</li>
                 <li>상단의 <strong>계산과정 설명</strong> 버튼을 누르면 자세한 원리를 볼 수 있습니다.</li>
               </ul>
             </div>
           </div>
           <div className="w-full md:min-h-[600px]">
-             <ResultView result={result} inputs={inputs} />
+             <ResultView result={result} inputs={inputs} isAiLoading={isAiLoading} />
           </div>
         </div>
       </main>
