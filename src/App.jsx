@@ -1,5 +1,128 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick } from 'lucide-react';
+import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X } from 'lucide-react';
+
+// ==========================================
+// 0. 계산 과정 설명 모달 컴포넌트 (NEW)
+// ==========================================
+const LogicModal = ({ onClose }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto relative animate-in zoom-in-95 duration-200 scrollbar-hide">
+      <button 
+        onClick={onClose}
+        className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors"
+      >
+        <X size={24} />
+      </button>
+      
+      <div className="p-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2 border-b pb-4">
+          🧮 계산과정 설명
+        </h2>
+        
+        <div className="space-y-8 text-gray-700 leading-relaxed">
+          <section>
+            <p className="text-lg font-medium text-gray-800 mb-3">
+              점공 계산의 핵심은 <span className="text-indigo-600 bg-indigo-50 px-1 rounded">"미점공자 중에 나보다 높은 점수가 몇 명이나 있을까?"</span>를 맞히는 것입니다.
+            </p>
+            <ul className="list-disc pl-5 space-y-2 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
+              <li><strong>단순 비례식의 함정:</strong> "미점공자도 점공자와 수준이 똑같을 것이다"라고 가정하면 등수가 너무 비관적으로 나옵니다.</li>
+              <li><strong>우리의 가설:</strong> 통계적으로 성적이 좋을수록 점공에 참여할 확률이 높습니다. 따라서 미점공자 집단에는 나보다 점수 높은 사람이 '드물게' 존재합니다.</li>
+            </ul>
+            <p className="mt-3 text-sm text-center text-gray-500">
+              이 '드물게'라는 정도를 숫자로 만든 것이 바로 <span className="font-bold text-gray-800">가중치(w)</span>입니다.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
+              가중치는 어떻게 구해지나요?
+            </h3>
+            <p className="text-sm mb-3">
+              가중치($w$)는 <strong>'미점공자의 위협도'</strong>를 의미합니다. (1.0 = 매우 위협적, 0.2 = 위협적이지 않음)
+              우리는 경쟁률을 기반으로 이 값을 자동으로 계산합니다.
+            </p>
+            
+            <div className="bg-slate-800 text-white p-4 rounded-xl font-mono text-center text-sm mb-4 shadow-md">
+              📉 경쟁률 로그 공식<br/>
+              <span className="text-yellow-400 text-lg">w = 0.7 - 0.15 × ln(경쟁률)</span>
+            </div>
+
+            <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
+              <li><strong>왜 자연로그(ln)를 쓰나요?</strong> 경쟁률이 5:1에서 10:1로 뛸 때와, 50:1에서 55:1로 뛸 때의 '허수 증가폭'은 다릅니다. 로그 함수는 경쟁률이 높아질수록 가중치를 합리적으로 낮춰주어, 경쟁률 폭발 학과에서 등수가 지나치게 밀리는 것을 방지합니다.</li>
+              <li><strong>기본값 0.7의 의미:</strong> 경쟁률이 낮아도 미점공자의 실력을 점공자의 약 70% 수준으로 보정하여, 지나친 행복회로를 방지합니다.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+              시간 보정 (Time Decay)
+            </h3>
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm space-y-2">
+              <p><strong>원리:</strong> 고득점자는 보통 점공 오픈 초기(1월 초)에 대부분 유입됩니다.</p>
+              <p><strong>로직:</strong> 1월 1일 00:00를 기점으로, 시간이 흐를수록 가중치를 미세하게 낮춥니다.</p>
+              <p className="text-blue-700">매 시간마다 정밀하게 계산되어 하루에 약 2%씩 미점공자의 위협도를 감소시킵니다. 즉, 늦게까지 점수를 공개하지 않는 사람은 '허수'일 확률이 높다고 판단합니다.</p>
+              <p className="text-xs text-gray-400 mt-2 border-t border-blue-200 pt-2">
+                결과: 어제보다 오늘, 오늘보다 내일 내 예상 등수가 조금씩 좋아질 수 있습니다. (최대 30%까지 보정)
+              </p>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">4</span>
+              최종 등수 계산
+            </h3>
+            <div className="text-sm space-y-3">
+              <p>위에서 구한 값들을 조합하여 최종 등수를 산출합니다.</p>
+              <div className="bg-gray-100 p-4 rounded-xl text-xs font-mono space-y-2">
+                <p>1. 미점공 인원 = (전체 지원자) - (점공 참여자)</p>
+                <p>2. 내 위치(상위%) = (내 등수) ÷ (점공 참여자)</p>
+                <div className="bg-white p-3 rounded border border-gray-200 my-2">
+                  <p className="font-bold text-indigo-600 mb-1">3. 상위 미점공자 예측 (핵심)</p>
+                  <p>(미점공 인원) × (내 상위 %) × (최종 가중치 w)</p>
+                  <p className="text-gray-400 mt-1">* 이 값은 반올림하여 정수로 계산합니다.</p>
+                </div>
+                <p className="font-bold text-gray-800">4. 최종 결과 = (현재 내 등수) + (상위 미점공자 예측값)</p>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+              <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">5</span>
+              3가지 시나리오의 의미
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-center">
+              <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+                <div className="font-bold text-green-700 mb-1">행복회로</div>
+                <div className="text-xs text-gray-600">"미점공자는 다 허수다!"<br/>(w=0.2 고정)</div>
+              </div>
+              <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200 shadow-sm">
+                <div className="font-bold text-indigo-700 mb-1">합리적 예측</div>
+                <div className="text-xs text-gray-600">AI 알고리즘 적용<br/>(경쟁률+시간 보정)</div>
+              </div>
+              <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                <div className="font-bold text-red-700 mb-1">보수적 예측</div>
+                <div className="text-xs text-gray-600">"미점공자도 다 실수다!"<br/>(w=1.0 고정)</div>
+              </div>
+            </div>
+          </section>
+        </div>
+        
+        <div className="mt-8 text-center">
+          <button 
+            onClick={onClose}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-8 rounded-xl transition-colors shadow-lg"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 // ==========================================
 // 1. 핵심 알고리즘 (반올림 로직 적용)
@@ -46,7 +169,7 @@ const calculatePrediction = (inputs) => {
   const unrevealedCount = realApplicants - revealedCount; // 미점공 인원
   const rankRatio = myRank / revealedCount; // 내 상위 비율
 
-  // [5] 시나리오별 등수 계산 (수정됨: 반올림 로직 적용)
+  // [5] 시나리오별 등수 계산 (반올림 로직 적용)
   const calculateRank = (w) => {
     // 미점공자 중 나보다 상위권일 것으로 예측되는 인원
     const hiddenSuperiors = unrevealedCount * rankRatio * w;
@@ -262,7 +385,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
 };
 
 // ==========================================
-// 3. 결과 시각화 컴포넌트 (반올림 결과 표시 수정)
+// 3. 결과 시각화 컴포넌트
 // ==========================================
 const ResultView = ({ result, inputs }) => {
   const [showDetail, setShowDetail] = useState(false);
@@ -422,11 +545,11 @@ const ResultView = ({ result, inputs }) => {
               <div className="space-y-2 pt-2">
                  <p className="text-xs font-bold text-gray-500 border-b pb-1">2. 미점공 상위권 예측</p>
                  <div className="flex justify-between text-gray-600 text-xs">
-                   <span>미점공 인원(A-V)</span>
+                   <span>미점공 인원</span>
                    <span className="font-mono">{breakdown.unrevealedCount}명</span>
                  </div>
                  <div className="flex justify-between text-gray-600 text-xs">
-                   <span>나의 상위 비율(r/V)</span>
+                   <span>나의 상위 비율</span>
                    <span className="font-mono">{breakdown.myRatioPercent}%</span>
                  </div>
                  <div className="bg-white border p-2 rounded text-xs text-center text-gray-600 font-mono">
@@ -472,7 +595,7 @@ const ResultView = ({ result, inputs }) => {
                 <span className="font-mono font-bold text-blue-600">{metrics.maxRank}등</span>
               </li>
               <li className="flex justify-between items-center bg-white p-2 rounded border border-indigo-100 mt-1">
-                <span className="font-bold text-indigo-900">현재 적용 가중치(w)</span>
+                <span className="font-bold text-indigo-900">현재 적용 가중치</span>
                 <span className="font-mono font-bold text-indigo-900">{currentWeight.toFixed(3)}</span>
               </li>
             </ul>
@@ -502,6 +625,8 @@ function App() {
   });
   
   const [result, setResult] = useState(null);
+  // [NEW] 설명 모달 상태 관리
+  const [showLogicModal, setShowLogicModal] = useState(false);
 
   useEffect(() => { localStorage.setItem('jeomgong_current_session', JSON.stringify(inputs)); }, [inputs]);
   useEffect(() => { localStorage.setItem('jeomgong_list', JSON.stringify(savedList)); }, [savedList]);
@@ -560,14 +685,31 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-gray-900 pb-12">
+      {/* 설명 모달 렌더링 */}
+      {showLogicModal && <LogicModal onClose={() => setShowLogicModal(false)} />}
+
       <header className="bg-indigo-900 text-white py-8 shadow-lg">
-        <div className="max-w-5xl mx-auto px-6">
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            🎓 점수공개 계산기
-          </h1>
-          <p className="text-indigo-200 text-sm mt-2 font-light">
-            AI 기반 점수공개 예측 서비스
-          </p>
+        <div className="max-w-5xl mx-auto px-6 relative">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-3">
+                🎓 점수공개 계산기
+              </h1>
+              <p className="text-indigo-200 text-sm mt-2 font-light">
+                AI 기반 점수공개 예측 서비스
+              </p>
+            </div>
+            
+            {/* [NEW] 계산과정 설명 버튼 */}
+            <button 
+              onClick={() => setShowLogicModal(true)}
+              className="flex items-center gap-1.5 text-xs sm:text-sm bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-4 py-2 rounded-full transition-colors border border-indigo-700 shadow-sm"
+            >
+              <HelpCircle size={16} />
+              <span className="hidden sm:inline">계산과정 설명</span>
+              <span className="sm:hidden">설명</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -583,6 +725,7 @@ function App() {
               <ul className="list-disc list-inside space-y-1 ml-1 text-xs sm:text-sm">
                 <li><strong>시나리오</strong>를 클릭하면 해당 시나리오의 상세 계산 과정을 볼 수 있습니다.</li>
                 <li>예상 추합 인원을 비워두면 모집인원의 50%로 계산합니다.</li>
+                <li>상단의 <strong>계산과정 설명</strong> 버튼을 누르면 자세한 원리를 볼 수 있습니다.</li>
               </ul>
             </div>
           </div>
