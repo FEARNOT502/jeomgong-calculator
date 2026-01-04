@@ -629,7 +629,6 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
       // 3. 다운로드 트리거
       const link = document.createElement('a');
       
-      // [MODIFIED] 파일명 포맷 변경: 점공분석_xx대_xx_xx월_xx일_xx시.jpg
       let dateStr = "";
       if (inputs.calcDate) {
         const [y, m, d] = inputs.calcDate.split('-');
@@ -645,7 +644,11 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
       
       link.download = filename;
       link.href = canvas.toDataURL('image/jpeg', 0.9); // JPG 포맷, 품질 0.9
+      
+      // [FIXED] 링크를 body에 추가한 뒤 클릭해야 오류가 발생하지 않는 브라우저 대응
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
 
     } catch (error) {
       console.error('Screenshot failed:', error);
