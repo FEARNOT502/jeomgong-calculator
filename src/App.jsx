@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown } from 'lucide-react';
+import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown, ChevronUp, Search } from 'lucide-react';
 
 // ==========================================
-// 1. 핵심 알고리즘 (추합 인원, 예비번호 로직)
+// 1. 핵심 알고리즘 (계산 과정 추적 로직 추가)
 // ==========================================
 const calculatePrediction = (inputs) => {
   const { quota, realApplicants, revealedCount, myRank, weight, additionalPasses } = inputs;
@@ -13,7 +13,7 @@ const calculatePrediction = (inputs) => {
 
   const competitionRate = realApplicants / quota;
   
-  // 날짜 기반 로직
+  // [1] 날짜 기반 로직
   const now = new Date();
   const currentYear = now.getFullYear();
   const startDate = new Date(currentYear, 0, 1); 
@@ -21,39 +21,45 @@ const calculatePrediction = (inputs) => {
   const daysPassed = Math.max(0, Math.floor(timeDiff / (1000 * 60 * 60 * 24)));
   const timeDecayFactor = Math.min(0.3, daysPassed * 0.02); 
 
+  // [2] 기본 가중치 산출
   let baseWeight = weight ? parseFloat(weight) : null;
+  let isAutoWeight = false;
+  
   if (baseWeight === null) {
-    baseWeight = Math.max(0.2, 0.7 - (0.15 * Math.log(competitionRate)));
+    isAutoWeight = true;
+    // 경쟁률이 1 미만일 때 로그값이 음수가 되어 가중치가 폭증하는 것을 방지
+    const safeCompetitionRate = Math.max(1.1, competitionRate);
+    baseWeight = Math.max(0.2, 0.7 - (0.15 * Math.log(safeCompetitionRate)));
   }
+  
+  // [3] 최종 가중치 (날짜 보정 적용)
   const appliedWeight = baseWeight * (1 - timeDecayFactor);
 
-  const unrevealedCount = realApplicants - revealedCount;
-  const rankRatio = myRank / revealedCount;
+  // [4] 등수 산출
+  const unrevealedCount = realApplicants - revealedCount; // 미점공 인원 (A-V)
+  const rankRatio = myRank / revealedCount; // 점공 내 상위 비율 (r/V)
+  
+  // 숨은 고수(나보다 잘한 미점공자) 추정치
+  const hiddenSuperiors = unrevealedCount * rankRatio * appliedWeight;
 
   const optimisticRank = myRank + (unrevealedCount * rankRatio * 0.2);
-  const realisticRank = myRank + (unrevealedCount * rankRatio * appliedWeight);
+  const realisticRank = myRank + hiddenSuperiors;
   const pessimisticRank = myRank * (realApplicants / revealedCount);
 
-  // --- [Modified] 추합 인원 반영 합격 확률 판정 ---
-  // 사용자 입력 추합 인원이 없으면 기본적으로 모집인원의 50% 가정
+  // [5] 추합 인원 반영 합격 확률 판정
   const userAdditionalPasses = (additionalPasses !== '' && additionalPasses !== null) 
     ? parseFloat(additionalPasses) 
     : Math.round(quota * 0.5);
     
-  const maxRank = quota + userAdditionalPasses; // 모집인원 + 추합인원 = 최종 등수 컷
-
-  // 예비 번호 계산 (예상 등수 - 모집 인원)
-  // 음수면 최초합, 양수면 예비 번호
+  const maxRank = quota + userAdditionalPasses; // 최종 등수 컷 (모집+추합)
   const waitingNum = Math.ceil(realisticRank) - quota;
   
   let probability = { label: "분석 불가", color: "text-gray-500", bgColor: "bg-gray-100", score: 0 };
 
-  // 모집인원 안쪽이면 최초합
   if (waitingNum <= 0) {
     if (realisticRank <= quota * 0.8) probability = { label: "최초합 확실 (Very Safe)", color: "text-blue-700", bgColor: "bg-blue-50", score: 95 };
     else probability = { label: "최초합 적정 (Safe)", color: "text-green-700", bgColor: "bg-green-50", score: 85 };
   } else {
-    // 예비 번호를 받았을 때
     if (realisticRank <= maxRank * 0.8) probability = { label: "추합 유력 (Probable)", color: "text-yellow-700", bgColor: "bg-yellow-50", score: 65 };
     else if (realisticRank <= maxRank) probability = { label: "추합권 (Risky)", color: "text-orange-700", bgColor: "bg-orange-50", score: 45 };
     else probability = { label: "불합격 유력 (Danger)", color: "text-red-700", bgColor: "bg-red-50", score: 15 };
@@ -69,16 +75,26 @@ const calculatePrediction = (inputs) => {
     probability,
     metrics: {
       competitionRate: competitionRate.toFixed(2),
-      appliedWeight: appliedWeight.toFixed(2),
+      appliedWeight: appliedWeight.toFixed(3),
       revealedRatio: ((revealedCount / realApplicants) * 100).toFixed(1),
       additionalPasses: userAdditionalPasses,
       maxRank: Math.floor(maxRank)
+    },
+    // [NEW] 상세 계산 과정 데이터
+    breakdown: {
+      isAutoWeight,
+      baseWeight: baseWeight.toFixed(3),
+      daysPassed,
+      timeDecayPercent: (timeDecayFactor * 100).toFixed(0),
+      unrevealedCount,
+      myRatioPercent: (rankRatio * 100).toFixed(2),
+      hiddenSuperiors: hiddenSuperiors.toFixed(2)
     }
   };
 };
 
 // ==========================================
-// 2. 입력 컴포넌트 (추합 인원 입력으로 변경)
+// 2. 입력 컴포넌트
 // ==========================================
 const InputField = ({ label, name, value, onChange, placeholder, subtext, type = "number", step, min, max }) => (
   <div className="mb-4">
@@ -141,7 +157,6 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         </button>
       </div>
 
-      {/* 저장된 데이터 불러오기 */}
       <div className="mb-6 bg-indigo-50 rounded-lg p-3 relative">
         <button 
           onClick={() => setIsLoadOpen(!isLoadOpen)}
@@ -193,22 +208,12 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
       
       <div className="grid grid-cols-1 gap-y-1">
         <div className="grid grid-cols-2 gap-3 mb-2">
-          <InputField label="대학" name="university" type="text" value={inputs.university} onChange={handleChange} placeholder="예: 서울대" />
-          <InputField label="학과" name="department" type="text" value={inputs.department} onChange={handleChange} placeholder="예: 경영학과" />
+          <InputField label="목표 대학" name="university" type="text" value={inputs.university} onChange={handleChange} placeholder="예: 한국대" />
+          <InputField label="모집 단위(학과)" name="department" type="text" value={inputs.department} onChange={handleChange} placeholder="예: 경영학과" />
         </div>
 
         <InputField label="모집 인원 (명)" name="quota" value={inputs.quota} onChange={handleChange} placeholder="예: 35" />
-        
-        {/* [Modified] 추합 인원 입력 필드 */}
-        <InputField 
-          label="예상 추합 인원 (명)" 
-          name="additionalPasses" 
-          value={inputs.additionalPasses} 
-          onChange={handleChange} 
-          placeholder="예: 15 (작년 입결 참고)" 
-          subtext="미입력시 모집 인원의 50%로 계산합니다."
-        />
-
+        <InputField label="예상 추합 인원 (명)" name="additionalPasses" value={inputs.additionalPasses} onChange={handleChange} placeholder="예: 15" subtext="입력 안 하면 모집 인원의 50%로 자동 계산" />
         <InputField label="전체 지원자 수" name="realApplicants" value={inputs.realApplicants} onChange={handleChange} placeholder="최종 경쟁률 기준" />
         <InputField label="점공 참여 인원" name="revealedCount" value={inputs.revealedCount} onChange={handleChange} placeholder="현재 점공 리포트 기준" />
         <InputField label="나의 점공 등수" name="myRank" value={inputs.myRank} onChange={handleChange} placeholder="예: 12" />
@@ -235,9 +240,11 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
 };
 
 // ==========================================
-// 3. 결과 시각화 컴포넌트 (공유 기능 제거)
+// 3. 결과 시각화 컴포넌트 (계산 과정 상세 표시)
 // ==========================================
 const ResultView = ({ result, inputs }) => {
+  const [showDetail, setShowDetail] = useState(false);
+
   if (!result) return (
     <div className="bg-white p-12 rounded-xl shadow-md border border-dashed border-gray-300 text-center h-full flex flex-col justify-center items-center">
       <div className="text-6xl mb-6 opacity-20">📊</div>
@@ -248,12 +255,11 @@ const ResultView = ({ result, inputs }) => {
     </div>
   );
 
-  const { ranks, probability, metrics, waitingNum } = result;
+  const { ranks, probability, metrics, waitingNum, breakdown } = result;
   const today = new Date().toLocaleDateString();
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md border border-indigo-50 h-full flex flex-col">
-      {/* Header with No Share Button */}
       <div className="flex items-center justify-between mb-4 border-b pb-4">
         <div className="flex items-center gap-2">
           <TrendingUp className="text-indigo-600" size={24} />
@@ -307,26 +313,92 @@ const ResultView = ({ result, inputs }) => {
           </div>
         </div>
 
+        {/* [NEW] 상세 계산 과정 표시 */}
         <div className="border-t pt-4">
-          <h3 className="font-semibold text-gray-700 text-sm mb-3">분석 상세 데이터</h3>
-          <ul className="text-sm space-y-2 text-gray-600 bg-gray-50 p-4 rounded-xl">
-            <li className="flex justify-between items-center">
-              <span>경쟁률</span>
-              <span className="font-mono font-bold">{metrics.competitionRate} : 1</span>
-            </li>
-            <li className="flex justify-between items-center">
-              <span>적용된 추합 인원</span>
-              <span className="font-mono font-bold text-indigo-600">+{metrics.additionalPasses}명</span>
-            </li>
-            <li className="flex justify-between items-center">
-              <span>예상 합격 최종등수(Cut)</span>
-              <span className="font-mono font-bold text-blue-600">{metrics.maxRank}등</span>
-            </li>
-            <li className="flex justify-between items-center bg-white p-2 rounded border border-indigo-100 mt-1">
-              <span className="font-bold text-indigo-900">최종 적용 가중치(w)</span>
-              <span className="font-mono font-bold text-indigo-900">{metrics.appliedWeight}</span>
-            </li>
-          </ul>
+          <button 
+            onClick={() => setShowDetail(!showDetail)}
+            className="w-full flex items-center justify-between font-semibold text-gray-700 text-sm mb-3 hover:text-indigo-600 transition-colors"
+          >
+            <span className="flex items-center gap-2"><Search size={16}/> 분석 상세 데이터 (계산 과정)</span>
+            {showDetail ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+          </button>
+          
+          {showDetail && (
+            <div className="bg-gray-50 p-4 rounded-xl text-sm space-y-3 mb-4 border border-gray-200 animate-in fade-in slide-in-from-top-2">
+              <div className="space-y-2">
+                 <p className="text-xs font-bold text-gray-500 border-b pb-1">1. 가중치($w$) 산출</p>
+                 <div className="flex justify-between text-gray-600">
+                   <span>기본 가중치 (경쟁률 {metrics.competitionRate}:1)</span>
+                   <span className="font-mono">{breakdown.isAutoWeight ? breakdown.baseWeight : '수동입력'}</span>
+                 </div>
+                 <div className="flex justify-between text-gray-600">
+                   <span>시간 경과 (D+{breakdown.daysPassed})</span>
+                   <span className="font-mono text-red-500">-{breakdown.timeDecayPercent}% 감점</span>
+                 </div>
+                 <div className="flex justify-between font-bold text-indigo-700 bg-indigo-50 px-2 py-1 rounded">
+                   <span>최종 가중치</span>
+                   <span className="font-mono">{metrics.appliedWeight}</span>
+                 </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                 <p className="text-xs font-bold text-gray-500 border-b pb-1">2. 숨은 고수 예측</p>
+                 <div className="flex justify-between text-gray-600 text-xs">
+                   <span>미점공 인원(A-V)</span>
+                   <span className="font-mono">{breakdown.unrevealedCount}명</span>
+                 </div>
+                 <div className="flex justify-between text-gray-600 text-xs">
+                   <span>내 상위 비율(r/V)</span>
+                   <span className="font-mono">{breakdown.myRatioPercent}%</span>
+                 </div>
+                 <div className="bg-white border p-2 rounded text-xs text-center text-gray-600 font-mono">
+                    {breakdown.unrevealedCount}명 × {breakdown.myRatioPercent}% × {metrics.appliedWeight}
+                    <div className="font-bold text-indigo-700 text-sm mt-1">
+                      = 약 {breakdown.hiddenSuperiors}명
+                    </div>
+                 </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                 <p className="text-xs font-bold text-gray-500 border-b pb-1">3. 최종 등수 합산</p>
+                 <div className="flex justify-between items-center">
+                   <span>나의 등수</span>
+                   <span className="font-mono font-bold">{inputs.myRank}등</span>
+                 </div>
+                 <div className="flex justify-center text-gray-400 text-xs">+</div>
+                 <div className="flex justify-between items-center">
+                   <span>숨은 고수(예측)</span>
+                   <span className="font-mono font-bold">{breakdown.hiddenSuperiors}명</span>
+                 </div>
+                 <div className="border-t border-gray-300 my-1"></div>
+                 <div className="flex justify-between items-center text-indigo-700 bg-indigo-50 p-2 rounded">
+                   <span className="font-bold">최종 예상 등수</span>
+                   <span className="font-mono font-extrabold text-lg">{ranks.realistic}등</span>
+                 </div>
+              </div>
+            </div>
+          )}
+
+          {!showDetail && (
+            <ul className="text-sm space-y-2 text-gray-600 bg-gray-50 p-4 rounded-xl">
+              <li className="flex justify-between items-center">
+                <span>경쟁률</span>
+                <span className="font-mono font-bold">{metrics.competitionRate} : 1</span>
+              </li>
+              <li className="flex justify-between items-center">
+                <span>추가 합격 인원</span>
+                <span className="font-mono font-bold text-indigo-600">+{metrics.additionalPasses}명</span>
+              </li>
+              <li className="flex justify-between items-center">
+                <span>합격 커트라인(등수)</span>
+                <span className="font-mono font-bold text-blue-600">{metrics.maxRank}등</span>
+              </li>
+              <li className="flex justify-between items-center bg-white p-2 rounded border border-indigo-100 mt-1">
+                <span className="font-bold text-indigo-900">최종 적용 가중치(w)</span>
+                <span className="font-mono font-bold text-indigo-900">{metrics.appliedWeight}</span>
+              </li>
+            </ul>
+          )}
         </div>
       </div>
     </div>
@@ -357,19 +429,17 @@ function App() {
   useEffect(() => { localStorage.setItem('jeomgong_list', JSON.stringify(savedList)); }, [savedList]);
 
   const handleCalculate = () => {
-    // 입력값을 계산 함수로 전달
     const calcInputs = {
       ...inputs,
       quota: parseFloat(inputs.quota),
       realApplicants: parseFloat(inputs.realApplicants),
       revealedCount: parseFloat(inputs.revealedCount),
       myRank: parseFloat(inputs.myRank),
-      // 추합인원(additionalPasses)는 calculatePrediction 내부에서 처리됨 (입력 안하면 자동 계산)
+      // additionalPasses 처리
     };
     const calcResult = calculatePrediction(calcInputs);
     setResult(calcResult);
 
-    // 대학/학과 입력 시 저장 목록 업데이트
     if (inputs.university && inputs.department) {
       const now = new Date();
       const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${now.getMinutes() < 10 ? '0' + now.getMinutes() : now.getMinutes()}`;
@@ -419,7 +489,7 @@ function App() {
             🎓 점수공개 계산기
           </h1>
           <p className="text-indigo-200 text-sm mt-2 font-light">
-            AI 기반 점수공개 예측 서비스
+            AI 기반 점수공개 예측 서비스 (상세 분석 모드 / 다중저장)
           </p>
         </div>
       </header>
@@ -434,9 +504,8 @@ function App() {
             <div className="mt-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 text-sm text-gray-600">
               <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">💡 꿀팁</h3>
               <ul className="list-disc list-inside space-y-1 ml-1 text-xs sm:text-sm">
-                <li><strong>예상 추합 인원</strong>을 입력하면 합격 커트라인을 더 정확히 계산합니다. (미입력시 모집인원의 절반으로 계산)</li>
-                <li>'예상 등수'가 모집인원보다 크면 <strong>예비 번호</strong>를 보여줍니다.</li>
-                <li>'계산하기'를 누르면 입력한 내용이 자동으로 저장됩니다.</li>
+                <li><strong>예상 추합 인원</strong>을 입력하면 합격 커트라인을 더 정확히 계산합니다. (안 쓰면 모집인원 절반으로 자동 계산)</li>
+                <li>결과창 하단의 <strong>분석 상세 데이터</strong>를 클릭하면 복잡한 계산 과정을 한눈에 볼 수 있습니다.</li>
               </ul>
             </div>
           </div>
