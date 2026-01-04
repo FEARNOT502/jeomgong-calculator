@@ -5,7 +5,6 @@ import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle
 // 0. 계산 과정 설명 모달 컴포넌트 (수정됨)
 // ==========================================
 const LogicModal = ({ onClose }) => {
-  // 모달이 열려있는 동안 메인 화면(Body) 스크롤 잠금 처리
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => {
@@ -14,14 +13,13 @@ const LogicModal = ({ onClose }) => {
   }, []);
 
   return (
-    // 배경 투명도 조절 (bg-black/40) 및 배경 클릭 시 닫기 기능 추가
     <div 
       className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={onClose}
     >
-      {/* 내부 콘텐츠 클릭 시 닫기 이벤트 전파 방지 (e.stopPropagation) */}
       <div 
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto relative animate-in zoom-in-95 duration-200"
+        // [MODIFIED] max-w-2xl -> max-w-4xl로 변경하여 너비 확장
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-y-auto relative animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <button 
@@ -67,14 +65,25 @@ const LogicModal = ({ onClose }) => {
 
               <ul className="list-disc pl-5 space-y-2 text-sm text-gray-600">
                 <li><strong>왜 자연로그(ln)를 쓰나요?</strong> 경쟁률이 5:1에서 10:1로 뛸 때와, 50:1에서 55:1로 뛸 때의 '허수 증가폭'은 다릅니다. 로그 함수는 경쟁률이 높아질수록 가중치를 합리적으로 낮춰주어, 경쟁률 폭발 학과에서 등수가 지나치게 밀리는 것을 방지합니다.</li>
-                <li><strong>기본값 0.7의 의미:</strong> 경쟁률이 낮아도 미점공자의 실력을 점공자의 약 70% 수준으로 보정하여, 지나친 행복회로를 방지합니다.</li>
               </ul>
             </section>
 
             <section>
               <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
                 <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
-                시간 보정 (Time Decay)
+                점공 비율 보정
+              </h3>
+              <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 text-sm space-y-2">
+                <p><strong>점공 비율 = (점공 인원 / 전체 지원자)</strong></p>
+                <p>점공 비율이 낮다는 것은 아직 '숨어있는 고수'가 많을 수 있다는 뜻입니다. 반대로 점공 비율이 높다면 이미 고득점자는 다 공개된 상태일 확률이 높습니다.</p>
+                <p className="text-yellow-800 font-semibold">👉 점공 비율이 낮으면 가중치를 조금 높이고, 높으면 가중치를 낮춰서 보정합니다.</p>
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                시간 보정
               </h3>
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm space-y-2">
                 <p><strong>원리:</strong> 고득점자는 보통 점공 오픈 초기(1월 초)에 대부분 유입됩니다.</p>
@@ -88,7 +97,7 @@ const LogicModal = ({ onClose }) => {
 
             <section>
               <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">4</span>
                 최종 등수 계산
               </h3>
               <div className="text-sm space-y-3">
@@ -102,27 +111,6 @@ const LogicModal = ({ onClose }) => {
                     <p className="text-gray-400 mt-1">* 이 값은 반올림하여 정수로 계산합니다.</p>
                   </div>
                   <p className="font-bold text-gray-800">4. 최종 결과 = (현재 내 등수) + (상위 미점공자 예측값)</p>
-                </div>
-              </div>
-            </section>
-
-            <section>
-              <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span className="bg-indigo-100 text-indigo-700 w-6 h-6 rounded-full flex items-center justify-center text-xs">4</span>
-                3가지 시나리오의 의미
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-center">
-                <div className="p-3 bg-green-50 rounded-lg border border-green-100">
-                  <div className="font-bold text-green-700 mb-1">행복회로</div>
-                  <div className="text-xs text-gray-600">"미점공자는 다 허수다!"<br/>(w=0.2 고정)</div>
-                </div>
-                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200 shadow-sm">
-                  <div className="font-bold text-indigo-700 mb-1">합리적 예측</div>
-                  <div className="text-xs text-gray-600">AI 알고리즘 적용<br/>(경쟁률+시간 보정)</div>
-                </div>
-                <div className="p-3 bg-red-50 rounded-lg border border-red-100">
-                  <div className="font-bold text-red-700 mb-1">보수적 예측</div>
-                  <div className="text-xs text-gray-600">"미점공자도 다 실수다!"<br/>(w=1.0 고정)</div>
                 </div>
               </div>
             </section>
@@ -143,38 +131,56 @@ const LogicModal = ({ onClose }) => {
 };
 
 // ==========================================
-// 1. 핵심 알고리즘 (반올림 로직 적용)
+// 1. 핵심 알고리즘 (날짜/시간 입력 반영)
 // ==========================================
 const calculatePrediction = (inputs) => {
-  const { quota, realApplicants, revealedCount, myRank, weight, additionalPasses } = inputs;
+  const { quota, realApplicants, revealedCount, myRank, additionalPasses, calcDate, calcHour } = inputs;
   
   if (revealedCount > realApplicants) throw new Error("점공 인원이 전체 지원자보다 많을 수 없습니다.");
   if (myRank > revealedCount) throw new Error("나의 등수가 점공 인원보다 클 수 없습니다.");
   if (quota <= 0) throw new Error("모집 인원은 0보다 커야 합니다.");
 
   const competitionRate = realApplicants / quota;
+  const revealedRatio = revealedCount / realApplicants; // 점공 비율 (0.0 ~ 1.0)
   
-  // [1] 날짜 및 시간 기반 로직
-  const now = new Date();
+  // [1] 날짜 및 시간 기반 로직 (사용자 입력 기준)
+  let now;
+  if (calcDate && calcHour !== '') {
+    const [y, m, d] = calcDate.split('-').map(Number);
+    // 월은 0-index이므로 m-1
+    now = new Date(y, m - 1, d, parseInt(calcHour));
+  } else {
+    now = new Date(); // Fallback (비정상 입력 시 현재 시간)
+  }
+
   const currentYear = now.getFullYear();
   const startDate = new Date(currentYear, 0, 1); // 1월 1일 00:00
+  // 시간 차이가 음수(1월 1일 이전)가 나오지 않도록 처리
   const timeDiff = Math.max(0, now - startDate);
   
   const totalHoursPassed = Math.floor(timeDiff / (1000 * 60 * 60));
   const daysPassed = Math.floor(totalHoursPassed / 24);
   const hoursLeft = totalHoursPassed % 24;
   
+  // 시간 경과 보정 (Time Decay): 하루에 약 2% 감소, 최대 30%
   const timeDecayFactor = Math.min(0.3, totalHoursPassed * (0.02 / 24)); 
 
-  // [2] 기본 가중치 산출
-  let baseWeight = weight ? parseFloat(weight) : null;
-  let isAutoWeight = false;
+  // [2] 기본 가중치 산출 (항상 자동 계산)
+  const safeCompetitionRate = Math.max(1.1, competitionRate);
+  // 기본 공식: 0.7 - 0.15 * ln(경쟁률)
+  let w = 0.7 - (0.15 * Math.log(safeCompetitionRate));
   
-  if (baseWeight === null) {
-    isAutoWeight = true;
-    const safeCompetitionRate = Math.max(1.1, competitionRate);
-    baseWeight = Math.max(0.2, 0.7 - (0.15 * Math.log(safeCompetitionRate)));
+  // 점공 비율 보정 (Revealed Ratio Correction)
+  const ratioCorrection = (0.5 - revealedRatio) * 0.2;
+  w = w + ratioCorrection;
+
+  // 점공 초반(3일 이내) 실수 유입 보정
+  if (daysPassed <= 3) {
+    w = Math.max(w, 0.35); 
   }
+
+  const baseWeight = Math.max(0.2, w); // 최소 0.2 안전장치
+  const isAutoWeight = true; // 수동 모드 제거됨
   
   // [3] 시나리오별 가중치 설정
   const weights = {
@@ -189,9 +195,7 @@ const calculatePrediction = (inputs) => {
 
   // [5] 시나리오별 등수 계산 (반올림 로직 적용)
   const calculateRank = (w) => {
-    // 미점공자 중 나보다 상위권일 것으로 예측되는 인원
     const hiddenSuperiors = unrevealedCount * rankRatio * w;
-    // 해당 인원을 반올림(Math.round)하여 내 등수에 더함
     return myRank + Math.round(hiddenSuperiors);
   };
   
@@ -238,7 +242,7 @@ const calculatePrediction = (inputs) => {
     weights,
     metrics: {
       competitionRate: competitionRate.toFixed(2),
-      revealedRatio: ((revealedCount / realApplicants) * 100).toFixed(1),
+      revealedRatio: (revealedRatio * 100).toFixed(1),
       additionalPasses: userAdditionalPasses,
       maxRank: Math.floor(quota + userAdditionalPasses)
     },
@@ -251,7 +255,8 @@ const calculatePrediction = (inputs) => {
       totalHoursPassed,
       timeDecayPercent: (timeDecayFactor * 100).toFixed(2),
       unrevealedCount,
-      myRatioPercent: (rankRatio * 100).toFixed(2)
+      myRatioPercent: (rankRatio * 100).toFixed(2),
+      ratioCorrection: ((0.5 - revealedRatio) * 0.2).toFixed(3)
     }
   };
 };
@@ -371,7 +376,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
       
       <div className="grid grid-cols-1 gap-y-1">
         <div className="grid grid-cols-2 gap-3 mb-2">
-          <InputField label="목표 대학" name="university" type="text" value={inputs.university} onChange={handleChange} placeholder="예: 서울대" />
+          <InputField label="대학" name="university" type="text" value={inputs.university} onChange={handleChange} placeholder="예: 서울대" />
           <InputField label="모집 단위(학과)" name="department" type="text" value={inputs.department} onChange={handleChange} placeholder="예: 경영학과" />
         </div>
 
@@ -381,11 +386,35 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         <InputField label="점공 참여 인원" name="revealedCount" value={inputs.revealedCount} onChange={handleChange} placeholder="현재 점공 리포트 기준" />
         <InputField label="나의 점공 등수" name="myRank" value={inputs.myRank} onChange={handleChange} placeholder="예: 12" />
         
+        {/* [NEW] 날짜 및 시간 입력 필드로 변경 */}
         <div className="mt-2 pt-4 border-t border-gray-100 bg-gray-50 p-3 rounded-lg">
-          <label className="block text-gray-700 text-sm font-bold mb-1 flex items-center gap-2">
-            <Clock size={16} className="text-indigo-500"/> 시간 반영 가중치 설정
+          <label className="block text-gray-700 text-sm font-bold mb-2 flex items-center gap-2">
+            <Clock size={16} className="text-indigo-500"/> 분석 시점 설정
           </label>
-          <input type="number" name="weight" value={inputs.weight} onChange={handleChange} step="0.1" min="0.1" max="1.0" className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm" placeholder="자동 계산 (권장)" />
+          <div className="flex gap-2">
+            <input
+              type="date"
+              name="calcDate"
+              value={inputs.calcDate}
+              onChange={handleChange}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+            />
+            <div className="relative w-28">
+              <input
+                type="number"
+                name="calcHour"
+                value={inputs.calcHour}
+                onChange={handleChange}
+                min="0"
+                max="23"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-center pr-8 bg-white"
+              />
+              <span className="absolute right-3 top-2 text-gray-500 text-sm">시</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 mt-2 ml-1">
+             * 설정한 시점을 기준으로 미점공자가 보정됩니다.
+          </p>
         </div>
       </div>
 
@@ -429,7 +458,6 @@ const ResultView = ({ result, inputs }) => {
   const currentProb = probabilities[activeScenario];
   const currentWeight = weights[activeScenario];
   
-  // 상세 내역에서 반올림된 '숨은 고수' 수 계산
   const estimatedHidden = Math.round(breakdown.unrevealedCount * (breakdown.myRatioPercent/100) * currentWeight);
 
   const scenarioNames = {
@@ -537,18 +565,35 @@ const ResultView = ({ result, inputs }) => {
                  {activeScenario === 'realistic' && (
                    <>
                      <div className="flex justify-between text-gray-600">
-                       <span>기본 가중치 (경쟁률 {metrics.competitionRate}:1)</span>
-                       <span className="font-mono">{breakdown.isAutoWeight ? breakdown.baseWeight : '수동입력'}</span>
+                       <span>로그 공식 (경쟁률 {metrics.competitionRate}:1)</span>
+                       <span className="font-mono">{breakdown.isAutoWeight ? (parseFloat(breakdown.baseWeight) - parseFloat(breakdown.ratioCorrection)).toFixed(3) : '수동'}</span>
                      </div>
+                     {/* [ADDED] 로그 공식 계산 과정 설명 */}
                      {breakdown.isAutoWeight && (
-                        <div className="flex justify-end">
-                           <div className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded mb-1 border border-gray-200">
-                             0.7 - (0.15 × ln({metrics.competitionRate})) ≈ {breakdown.baseWeight}
+                        <div className="flex justify-end mb-1">
+                           <div className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                             * 0.7 - 0.15 × ln({metrics.competitionRate})
                            </div>
                         </div>
                      )}
+
+                     {breakdown.isAutoWeight && (
+                        <>
+                          <div className="flex justify-between text-gray-600">
+                            <span>점공 비율 보정 ({metrics.revealedRatio}%)</span>
+                            <span className={`font-mono ${parseFloat(breakdown.ratioCorrection) > 0 ? 'text-blue-600' : 'text-red-500'}`}>
+                              {parseFloat(breakdown.ratioCorrection) > 0 ? '+' : ''}{breakdown.ratioCorrection}
+                            </span>
+                          </div>
+                          <div className="flex justify-end mb-1">
+                             <div className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                               * (0.5 - {(parseFloat(metrics.revealedRatio)/100).toFixed(3)}) × 0.2
+                             </div>
+                          </div>
+                        </>
+                     )}
                      <div className="flex justify-between text-gray-600">
-                       <span>시간 경과 (D+{breakdown.daysPassed} {breakdown.hoursLeft}시간)</span>
+                       <span>시간 경과 (D+{breakdown.daysPassed})</span>
                        <span className="font-mono text-red-500">-{breakdown.timeDecayPercent}%</span>
                      </div>
                    </>
@@ -605,6 +650,10 @@ const ResultView = ({ result, inputs }) => {
                 <span className="font-mono font-bold">{metrics.competitionRate} : 1</span>
               </li>
               <li className="flex justify-between items-center">
+                <span>점공 참여율</span>
+                <span className="font-mono font-bold">{metrics.revealedRatio}%</span>
+              </li>
+              <li className="flex justify-between items-center">
                 <span>추가 합격 인원</span>
                 <span className="font-mono font-bold text-indigo-600">+{metrics.additionalPasses}명</span>
               </li>
@@ -627,14 +676,44 @@ const ResultView = ({ result, inputs }) => {
 // ==========================================
 // 4. 메인 앱 통합
 // ==========================================
+
+// Helper functions for date/time
+const getToday = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getCurrentHour = () => new Date().getHours();
+
 function App() {
+  // [NEW] calcDate, calcHour 초기값 추가
   const initialInputs = {
-    university: '', department: '', quota: '', realApplicants: '', revealedCount: '', myRank: '', weight: '', additionalPasses: ''
+    university: '', 
+    department: '', 
+    quota: '', 
+    realApplicants: '', 
+    revealedCount: '', 
+    myRank: '', 
+    additionalPasses: '',
+    calcDate: getToday(),
+    calcHour: getCurrentHour()
   };
 
   const [inputs, setInputs] = useState(() => {
     const lastSession = localStorage.getItem('jeomgong_current_session');
-    return lastSession ? JSON.parse(lastSession) : initialInputs;
+    if (lastSession) {
+      const parsed = JSON.parse(lastSession);
+      // 세션을 불러오더라도 날짜/시간은 '현재'로 리셋 (사용자 요청 사항)
+      return {
+        ...parsed,
+        calcDate: getToday(),
+        calcHour: getCurrentHour()
+      };
+    }
+    return initialInputs;
   });
 
   const [savedList, setSavedList] = useState(() => {
@@ -643,7 +722,6 @@ function App() {
   });
   
   const [result, setResult] = useState(null);
-  // [NEW] 설명 모달 상태 관리
   const [showLogicModal, setShowLogicModal] = useState(false);
 
   useEffect(() => { localStorage.setItem('jeomgong_current_session', JSON.stringify(inputs)); }, [inputs]);
@@ -683,7 +761,12 @@ function App() {
   };
 
   const handleLoad = (item) => {
-    setInputs({ ...item });
+    // 저장된 값을 불러올 때, 날짜와 시간은 '현재(컴퓨터 시간)'로 강제 업데이트
+    setInputs({ 
+      ...item,
+      calcDate: getToday(),
+      calcHour: getCurrentHour()
+    });
     setResult(null);
   };
 
@@ -695,7 +778,11 @@ function App() {
 
   const handleReset = () => {
     if (window.confirm('모두 지우시겠습니까?')) {
-      setInputs(initialInputs);
+      setInputs({
+        ...initialInputs,
+        calcDate: getToday(), // 리셋 시에도 현재 시간 유지
+        calcHour: getCurrentHour()
+      });
       setResult(null);
       localStorage.removeItem('jeomgong_current_session');
     }
@@ -718,7 +805,6 @@ function App() {
               </p>
             </div>
             
-            {/* [NEW] 계산과정 설명 버튼 */}
             <button 
               onClick={() => setShowLogicModal(true)}
               className="flex items-center gap-1.5 text-xs sm:text-sm bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-4 py-2 rounded-full transition-colors border border-indigo-700 shadow-sm"
@@ -740,16 +826,16 @@ function App() {
             />
             <div className="mt-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 text-sm text-gray-600">
               <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">💡 사용 안내</h3>
-              <ul className="list-disc list-inside space-y-1 ml-1 text-xs sm:text-sm">
-                <li><strong>시나리오</strong>를 클릭하면 해당 시나리오의 상세 계산 과정을 볼 수 있습니다.</li>
+              <ul className="list-disc pl-4 space-y-1 text-xs sm:text-sm">
+                <li><strong>시나리오</strong>를 클릭하면 해당 시나리오의 계산 과정을 볼 수 있습니다.</li>
                 <li>예상 추합 인원을 비워두면 모집인원의 50%로 계산합니다.</li>
                 <li>상단의 <strong>계산과정 설명</strong> 버튼을 누르면 자세한 원리를 볼 수 있습니다.</li>
               </ul>
             </div>
           </div>
-          <div className="w-full md:min-h-[600px]\">
-              <ResultView result={result} inputs={inputs} />
-            </div>
+          <div className="w-full md:min-h-[600px]">
+             <ResultView result={result} inputs={inputs} />
+          </div>
         </div>
       </main>
 
