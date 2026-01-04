@@ -6,7 +6,7 @@ import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Tr
 // ==========================================
 // 배포 후 더 성능 좋은 모델을 사용하려면 아래 값을 변경하세요.
 // 예: "gemini-1.5-pro", "gemini-pro" 등 (Google AI Studio에서 지원하는 모델명 확인 필요)
-const GEMINI_MODEL = "gemini-3-pro"; 
+const GEMINI_MODEL = "gemini-3-pro-preview"; 
 
 // ==========================================
 // 0. Gemini API 호출 함수 (동적 키 사용)
@@ -184,7 +184,7 @@ const LogicModal = ({ onClose }) => {
                 가중치는 어떻게 구해지나요?
               </h3>
               <p className="text-sm mb-3">
-                가중치($w$)는 <strong>'미점공자의 위협도'</strong>를 의미합니다. (1.0 = 매우 위협적, 0.2 = 위협적이지 않음)
+                가중치(w)는 <strong>'미점공자의 위협도'</strong>를 의미합니다. (1.0 = 매우 위협적, 0.2 = 위협적이지 않음)
                 우리는 경쟁률을 기반으로 이 값을 자동으로 계산합니다.
               </p>
               
@@ -1040,7 +1040,7 @@ function App() {
             <div className="mt-6 bg-white p-5 rounded-xl shadow-sm border border-gray-200 text-sm text-gray-600">
               <h3 className="font-bold text-gray-800 mb-2 flex items-center gap-2">💡 사용 안내</h3>
               <ul className="list-disc pl-4 space-y-1 text-xs sm:text-sm">
-                <li><strong>시나리오</strong>를 클릭하면 해당 시나리오의 상세 계산 과정을 볼 수 있습니다.</li>
+                <li><strong>시나리오</strong>를 클릭하면 해당 시나리오의 계산 과정을 볼 수 있습니다.</li>
                 <li>예상 추합 인원을 비워두면 모집인원의 50%로 계산합니다.</li>
                 <li>상단의 <strong>계산과정 설명</strong> 버튼을 누르면 자세한 원리를 볼 수 있습니다.</li>
               </ul>
