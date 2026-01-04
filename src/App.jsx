@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calculator, AlertCircle, CheckCircle2, TrendingUp, Users, AlertTriangle, GraduationCap, Clock, Save, RotateCcw, Calendar, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick } from 'lucide-react';
 
 // ==========================================
-// 1. 핵심 알고리즘 (시간 단위 보정 + 시나리오별 데이터 구조화)
+// 1. 핵심 알고리즘 (반올림 로직 적용)
 // ==========================================
 const calculatePrediction = (inputs) => {
   const { quota, realApplicants, revealedCount, myRank, weight, additionalPasses } = inputs;
@@ -13,22 +13,19 @@ const calculatePrediction = (inputs) => {
 
   const competitionRate = realApplicants / quota;
   
-  // [1] 날짜 및 시간 기반 로직 (정밀도 향상)
+  // [1] 날짜 및 시간 기반 로직
   const now = new Date();
   const currentYear = now.getFullYear();
   const startDate = new Date(currentYear, 0, 1); // 1월 1일 00:00
-  const timeDiff = Math.max(0, now - startDate); // 밀리초 단위 차이
+  const timeDiff = Math.max(0, now - startDate);
   
-  // 시간 단위 계산
   const totalHoursPassed = Math.floor(timeDiff / (1000 * 60 * 60));
   const daysPassed = Math.floor(totalHoursPassed / 24);
   const hoursLeft = totalHoursPassed % 24;
   
-  // 시간당 0.083% 감소 (하루 2% / 24시간) -> 정밀한 Time Decay
-  // 최대 30% 감점 제한
   const timeDecayFactor = Math.min(0.3, totalHoursPassed * (0.02 / 24)); 
 
-  // [2] 기본 가중치 산출 (Realistic용)
+  // [2] 기본 가중치 산출
   let baseWeight = weight ? parseFloat(weight) : null;
   let isAutoWeight = false;
   
@@ -40,26 +37,30 @@ const calculatePrediction = (inputs) => {
   
   // [3] 시나리오별 가중치 설정
   const weights = {
-    optimistic: 0.2, // 행복회로 고정
-    realistic: baseWeight * (1 - timeDecayFactor), // 시간 보정 적용
-    pessimistic: 1.0 // 단순 비례 (보수적)
+    optimistic: 0.2,
+    realistic: baseWeight * (1 - timeDecayFactor),
+    pessimistic: 1.0
   };
 
   // [4] 공통 변수 계산
   const unrevealedCount = realApplicants - revealedCount; // 미점공 인원
   const rankRatio = myRank / revealedCount; // 내 상위 비율
 
-  // [5] 시나리오별 등수 계산
-  const calculateRank = (w) => myRank + (unrevealedCount * rankRatio * w);
+  // [5] 시나리오별 등수 계산 (수정됨: 반올림 로직 적용)
+  const calculateRank = (w) => {
+    // 미점공자 중 나보다 상위권일 것으로 예측되는 인원
+    const hiddenSuperiors = unrevealedCount * rankRatio * w;
+    // 해당 인원을 반올림(Math.round)하여 내 등수에 더함
+    return myRank + Math.round(hiddenSuperiors);
+  };
   
   const ranks = {
-    optimistic: Math.floor(calculateRank(weights.optimistic)),
-    realistic: Math.floor(calculateRank(weights.realistic)),
-    pessimistic: Math.floor(calculateRank(weights.pessimistic))
+    optimistic: calculateRank(weights.optimistic),
+    realistic: calculateRank(weights.realistic),
+    pessimistic: calculateRank(weights.pessimistic)
   };
 
-  // [6] 합격 확률 판정 (현재 선택된 시나리오에 따라 UI에서 보여줄 예정)
-  // 여기서는 Realistic 기준으로 기본 확률 객체 생성 (초기값용)
+  // [6] 합격 확률 판정
   const getProbability = (rank) => {
     const userAdditionalPasses = (additionalPasses !== '' && additionalPasses !== null) 
       ? parseFloat(additionalPasses) 
@@ -80,7 +81,6 @@ const calculatePrediction = (inputs) => {
     return { ...prob, waitingNum: waitingNum > 0 ? `예비 ${waitingNum}번` : `최초합 예상` };
   };
 
-  // 모든 시나리오에 대한 확률 계산
   const probabilities = {
     optimistic: getProbability(ranks.optimistic),
     realistic: getProbability(ranks.realistic),
@@ -108,7 +108,7 @@ const calculatePrediction = (inputs) => {
       daysPassed,
       hoursLeft,
       totalHoursPassed,
-      timeDecayPercent: (timeDecayFactor * 100).toFixed(2), // 소수점 2자리까지
+      timeDecayPercent: (timeDecayFactor * 100).toFixed(2),
       unrevealedCount,
       myRatioPercent: (rankRatio * 100).toFixed(2)
     }
@@ -262,14 +262,12 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
 };
 
 // ==========================================
-// 3. 결과 시각화 컴포넌트 (시나리오 선택 기능 추가)
+// 3. 결과 시각화 컴포넌트 (반올림 결과 표시 수정)
 // ==========================================
 const ResultView = ({ result, inputs }) => {
   const [showDetail, setShowDetail] = useState(false);
-  // [NEW] 현재 선택된 시나리오 상태 (기본값: realistic)
   const [activeScenario, setActiveScenario] = useState('realistic');
 
-  // 결과가 바뀌면 자동으로 '합리적'으로 리셋
   useEffect(() => {
     if (result) setActiveScenario('realistic');
   }, [result]);
@@ -286,12 +284,13 @@ const ResultView = ({ result, inputs }) => {
 
   const { ranks, probabilities, metrics, weights, breakdown } = result;
   
-  // 현재 선택된 시나리오 데이터
   const currentRank = ranks[activeScenario];
   const currentProb = probabilities[activeScenario];
   const currentWeight = weights[activeScenario];
   
-  // 시나리오별 한글 명칭
+  // 상세 내역에서 반올림된 '숨은 고수' 수 계산
+  const estimatedHidden = Math.round(breakdown.unrevealedCount * (breakdown.myRatioPercent/100) * currentWeight);
+
   const scenarioNames = {
     optimistic: '행복회로 (낙관)',
     realistic: '합리적 예측',
@@ -320,7 +319,6 @@ const ResultView = ({ result, inputs }) => {
         </div>
       )}
       
-      {/* 메인 결과 카드 (선택된 시나리오 반영) */}
       <div className={`p-6 rounded-2xl text-center mb-6 border-2 transition-all duration-300 ${currentProb.bgColor} ${currentProb.color.replace('text', 'border').replace('700', '200')}`}>
         <p className="text-sm text-gray-600 font-semibold mb-2 flex justify-center items-center gap-2">
           {scenarioNames[activeScenario]} 결과
@@ -338,7 +336,6 @@ const ResultView = ({ result, inputs }) => {
       </div>
 
       <div className="space-y-6 flex-grow">
-        {/* 시나리오 선택 버튼 그룹 */}
         <div>
           <h3 className="font-semibold text-gray-700 text-sm mb-3 flex items-center gap-1">
             <MousePointerClick size={16}/> 시나리오 선택 (클릭하여 상세 확인)
@@ -368,7 +365,6 @@ const ResultView = ({ result, inputs }) => {
           </div>
         </div>
 
-        {/* 상세 계산 과정 (선택된 시나리오에 따라 동적으로 변화) */}
         <div className="border-t pt-4">
           <button 
             onClick={() => setShowDetail(!showDetail)}
@@ -383,9 +379,8 @@ const ResultView = ({ result, inputs }) => {
           {showDetail && (
             <div className="bg-gray-50 p-4 rounded-xl text-sm space-y-3 mb-4 border border-gray-200 animate-in fade-in slide-in-from-top-2">
               <div className="space-y-2">
-                 <p className="text-xs font-bold text-gray-500 border-b pb-1">1. 가중치(w) 산출</p>
+                 <p className="text-xs font-bold text-gray-500 border-b pb-1">1. 가중치 산출</p>
                  
-                 {/* 시나리오별 가중치 설명 분기 처리 */}
                  {activeScenario === 'optimistic' && (
                    <div className="text-gray-600 text-xs bg-green-50 p-2 rounded">
                      행복회로 모드는 <strong>고정 가중치 0.2</strong>를 사용합니다.<br/>
@@ -413,10 +408,7 @@ const ResultView = ({ result, inputs }) => {
                      )}
                      <div className="flex justify-between text-gray-600">
                        <span>시간 경과 (D+{breakdown.daysPassed} {breakdown.hoursLeft}시간)</span>
-                       <span className="font-mono text-red-500">-{breakdown.timeDecayPercent}% 감점</span>
-                     </div>
-                     <div className="text-[10px] text-gray-400 text-right mb-1">
-                       * {breakdown.totalHoursPassed}시간 경과 × (0.02 / 24)
+                       <span className="font-mono text-red-500">-{breakdown.timeDecayPercent}%</span>
                      </div>
                    </>
                  )}
@@ -440,7 +432,7 @@ const ResultView = ({ result, inputs }) => {
                  <div className="bg-white border p-2 rounded text-xs text-center text-gray-600 font-mono">
                     {breakdown.unrevealedCount}명 × {breakdown.myRatioPercent}% × {currentWeight.toFixed(3)}
                     <div className="font-bold text-indigo-700 text-sm mt-1">
-                      = 약 {(breakdown.unrevealedCount * (breakdown.myRatioPercent/100) * currentWeight).toFixed(2)}명
+                      = {estimatedHidden}명 (반올림)
                     </div>
                  </div>
               </div>
@@ -454,7 +446,7 @@ const ResultView = ({ result, inputs }) => {
                  <div className="flex justify-center text-gray-400 text-xs">+</div>
                  <div className="flex justify-between items-center">
                    <span>미점공자 중 상위 인원수(예측)</span>
-                   <span className="font-mono font-bold">{(breakdown.unrevealedCount * (breakdown.myRatioPercent/100) * currentWeight).toFixed(2)}명</span>
+                   <span className="font-mono font-bold">{estimatedHidden}명</span>
                  </div>
                  <div className="border-t border-gray-300 my-1"></div>
                  <div className="flex justify-between items-center text-indigo-700 bg-indigo-50 p-2 rounded">
