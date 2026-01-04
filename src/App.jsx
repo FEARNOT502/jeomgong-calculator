@@ -37,14 +37,17 @@ const getAiAdjustment = async (inputs, userApiKey) => {
     - My Rank: ${myRank}
     - Analysis Time Point: ${analysisTimeStr}
 
-    [Analysis Logic]
-    1. **Jeomgong Pattern & Time:** - Early period + Low ratio: Natural.
-       - Late period + Low ratio: High probability of hidden high scorers (Dark matter). -> Conservative (+)
-    2. **Department Characteristics:**
-       - "Mun-Sa-Cheol" (Humanities) or unpopular majors at top schools: Often safety picks. 
-       - Medical/Engineering: High scorers tend to stay.
-       - Consider specific university dynamics (e.g., Jigeoguk, Education Univ).
-    3. **Focus:**
+    [Analysis Logic - Synthesis is Key]
+    1. **Analyze University/Department Nature:**
+       - Is it a top-tier preference (Medical, SKY)? Or a safety pick (unpopular majors at top schools)?
+       - Is it a "Jigeoguk" (Regional National) or Education University? (Often has hidden high scorers).
+    2. **Analyze Jeomgong Stats:**
+       - **Revealed Ratio:** Low ratio in late period -> High risk of hidden scorers (+). High ratio -> Low risk (-).
+       - **Competition Rate:** Extremely high rate might indicate "bubble" applicants (-), but in top depts, it means fierce competition (+).
+    3. **Synthesize (Crucial):**
+       - Combine nature and stats. E.g., "Safety pick department" + "High Jeomgong Ratio" = Very low risk of hidden superiors (-).
+       - "Medical school" + "Low Jeomgong Ratio" = Extremely high risk of hidden superiors (+).
+    4. **Focus:**
        - **IGNORE** dropout rates (ghosts leaving for other schools) or waitlist chances.
        - **FOCUS ONLY** on estimating the *current* rank by predicting how many unrevealed applicants are ranked higher than me.
 
@@ -56,7 +59,7 @@ const getAiAdjustment = async (inputs, userApiKey) => {
     
     Output Requirement:
     Return ONLY a raw JSON object.
-    Structure: { "factor": number, "reason": "Short explanation in Korean (under 50 chars) focusing on Jeomgong pattern, time & ratio." }
+    Structure: { "factor": number, "reason": "Short explanation in Korean (under 50 chars) synthesizing Dept nature & Ratio stats." }
   `;
 
   try {
