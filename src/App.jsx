@@ -6,7 +6,7 @@ import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Tr
 // ==========================================
 // 배포 후 더 성능 좋은 모델을 사용하려면 아래 값을 변경하세요.
 // 예: "gemini-1.5-pro", "gemini-pro" 등 (Google AI Studio에서 지원하는 모델명 확인 필요)
-const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025"; 
+const GEMINI_MODEL = "gemini-3-pro"; 
 
 // ==========================================
 // 0. Gemini API 호출 함수 (동적 키 사용)
