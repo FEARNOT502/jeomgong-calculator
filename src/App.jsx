@@ -219,11 +219,11 @@ const LogicModal = ({ onClose }) => {
                 <p><strong>원리:</strong> 고득점자는 보통 점공 오픈 초기(1월 초)에 대부분 유입됩니다.</p>
                 <p><strong>로직:</strong> 1월 1일을 시작점으로, 점공 마감일인 2월 2일까지 시간이 흐를수록 가중치를 낮춥니다.</p>
                 <p className="text-blue-700">
-                  초반에 고득점자 유입이 집중된다는 점을 반영하여 <strong>로그 함수</strong>를 적용했습니다. 
+                  초반에 고득점자 유입이 집중된다는 점을 반영하여 <strong>로그 함수(Logarithmic)</strong>를 적용했습니다. 
                   초반에 가중치가 빠르게 감소하고 후반에는 완만해지며, 마감 시점에는 최대 30%까지 보정됩니다.
                 </p>
                 <p className="text-xs text-gray-400 mt-2 border-t border-blue-200 pt-2">
-                  결과: 분석 시점이 2월 2일에 가까울수록 내 예상 등수가 좋아질 확률이 높습니다.
+                  결과: 분석 시점이 2월 2일에 가까울수록 내 예상 등수가 좋아질(낮아질) 확률이 높습니다.
                 </p>
               </div>
             </section>
@@ -276,9 +276,11 @@ const LogicModal = ({ onClose }) => {
 };
 
 // ==========================================
-// 0.3 등수 변화 추이 그래프 컴포넌트 (신규)
+// 0.3 등수 변화 추이 그래프 컴포넌트 (디자인 개선됨)
 // ==========================================
 const HistoryGraph = ({ history }) => {
+  const [hoveredPoint, setHoveredPoint] = useState(null);
+
   if (!history || history.length < 2) {
     return (
       <div className="h-40 flex items-center justify-center text-gray-400 text-xs border border-dashed border-gray-200 rounded-lg bg-gray-50">
@@ -290,80 +292,97 @@ const HistoryGraph = ({ history }) => {
   // 데이터 정렬 (시간순)
   const sortedHistory = [...history].sort((a, b) => a.rawDate - b.rawDate);
   
-  // Y축 범위 설정 (등수)
+  // Y축 범위 설정 (등수) - 등수는 낮을수록(1등) 좋으므로 그래프 상단에 위치해야 함
   const ranks = sortedHistory.map(h => h.rank);
   const minRank = Math.min(...ranks);
   const maxRank = Math.max(...ranks);
-  const padding = (maxRank - minRank) || 1; // 등수가 같을 경우 대비
+  const padding = (maxRank - minRank) || 1; 
   const yMin = Math.max(1, minRank - Math.ceil(padding * 0.2));
   const yMax = maxRank + Math.ceil(padding * 0.2);
 
-  // SVG 크기
-  const width = 100;
-  const height = 60;
-  const points = sortedHistory.map((h, i) => {
-    const x = (i / (sortedHistory.length - 1)) * width;
-    // 등수는 숫자가 작을수록(1등) 좋으므로 Y축 반전 (1등이 위로 가도록)
-    // 일반 그래프: (value - min) / (max - min) * height
-    // 반전 그래프: (max - value) / (max - min) * height
-    const normalizedY = (yMax - h.rank) / (yMax - yMin); 
-    const y = (1 - normalizedY) * height * 0.8 + 10; // 상하 여백 10%
-    return `${x},${y}`;
-  }).join(' ');
+  // SVG 좌표 계산 (0~100% 기준)
+  const dataPoints = sortedHistory.map((h, i) => {
+    const x = (i / (sortedHistory.length - 1)) * 100;
+    // Y축 반전: (max - rank) / range (1등이 100%에 가깝게)
+    const normalizedY = (yMax - h.rank) / (yMax - yMin);
+    const y = (1 - normalizedY) * 80 + 10; // 상하 10% 여백
+    return { x, y, ...h };
+  });
+
+  const polylinePoints = dataPoints.map(p => `${p.x},${p.y}`).join(' ');
 
   return (
     <div className="mt-6 pt-6 border-t border-gray-100">
       <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-sm">
         <LineChart size={16} className="text-indigo-600"/> 등수 변화 추이
       </h3>
-      <div className="relative h-40 w-full">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
-          {/* Grid Lines (Optional) */}
-          <line x1="0" y1="10" x2="100" y2="10" stroke="#f0f0f0" strokeWidth="0.5" />
-          <line x1="0" y1={height * 0.8 + 10} x2="100" y2={height * 0.8 + 10} stroke="#f0f0f0" strokeWidth="0.5" />
+      <div className="relative h-40 w-full select-none" onMouseLeave={() => setHoveredPoint(null)}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+          {/* Grid Lines */}
+          <line x1="0" y1="10" x2="100" y2="10" stroke="#f3f4f6" strokeWidth="0.5" strokeDasharray="2" />
+          <line x1="0" y1="90" x2="100" y2="90" stroke="#f3f4f6" strokeWidth="0.5" strokeDasharray="2" />
           
           {/* Chart Line */}
           <polyline
             fill="none"
-            stroke="#4f46e5"
+            stroke="#6366f1"
             strokeWidth="1.5"
-            points={points}
+            points={polylinePoints}
             vectorEffect="non-scaling-stroke"
             className="drop-shadow-sm"
           />
           
           {/* Data Points */}
-          {sortedHistory.map((h, i) => {
-            const x = (i / (sortedHistory.length - 1)) * width;
-            const normalizedY = (yMax - h.rank) / (yMax - yMin);
-            const y = (1 - normalizedY) * height * 0.8 + 10;
-            return (
-              <g key={i} className="group">
-                <circle
-                  cx={x}
-                  cy={y}
-                  r="1.5"
-                  fill="white"
-                  stroke="#4f46e5"
-                  strokeWidth="1"
-                  vectorEffect="non-scaling-stroke"
-                  className="cursor-pointer hover:r-2 transition-all"
-                />
-                {/* Tooltip (CSS Hover) */}
-                <foreignObject x={x - 15} y={y - 15} width="30" height="20" className="overflow-visible pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="bg-indigo-900 text-white text-[8px] rounded px-1 py-0.5 text-center whitespace-nowrap shadow-lg absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1">
-                    {h.date}<br/>
-                    <span className="font-bold">{h.rank}등</span>
-                  </div>
-                </foreignObject>
-              </g>
-            );
-          })}
+          {dataPoints.map((p, i) => (
+            <g key={i}>
+              {/* Visible Dot */}
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={hoveredPoint === p ? 2.5 : 1.5}
+                fill="white"
+                stroke="#6366f1"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+                className="transition-all duration-200"
+              />
+              {/* Invisible Hit Area (Larger for easier hover) */}
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r="4"
+                fill="transparent"
+                stroke="none"
+                vectorEffect="non-scaling-stroke"
+                onMouseEnter={() => setHoveredPoint(p)}
+                className="cursor-pointer"
+              />
+            </g>
+          ))}
         </svg>
+
+        {/* HTML Tooltip Overlay (Absolute Positioned) */}
+        {hoveredPoint && (
+          <div 
+            className="absolute z-10 flex flex-col items-center pointer-events-none transition-all duration-200"
+            style={{ 
+              left: `${hoveredPoint.x}%`, 
+              top: `${hoveredPoint.y}%`,
+              transform: 'translate(-50%, -130%)' // 점 위로 띄움
+            }}
+          >
+            <div className="bg-slate-800 text-white text-[10px] rounded py-1 px-2 shadow-xl flex flex-col items-center whitespace-nowrap opacity-90 backdrop-blur-sm">
+               <span className="text-[9px] text-slate-300 leading-tight mb-0.5">{hoveredPoint.date.split(' ')[0]}</span>
+               <span className="font-bold leading-tight">{hoveredPoint.rank}등</span>
+            </div>
+            {/* Arrow */}
+            <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-slate-800/90"></div>
+          </div>
+        )}
       </div>
-      <div className="flex justify-between text-[10px] text-gray-400 mt-1">
-        <span>{sortedHistory[0].date}</span>
-        <span>{sortedHistory[sortedHistory.length - 1].date}</span>
+      <div className="flex justify-between text-[10px] text-gray-400 mt-2 font-mono">
+        <span>{sortedHistory[0].date.split(' ')[0]}</span>
+        <span>{sortedHistory[sortedHistory.length - 1].date.split(' ')[0]}</span>
       </div>
     </div>
   );
