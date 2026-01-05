@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X, BrainCircuit, Key, Save, Download, Zap } from 'lucide-react';
+import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X, BrainCircuit, Key, Save, Download, Zap, LineChart } from 'lucide-react';
 
 // ==========================================
 // 설정: Gemini 모델 변경
@@ -217,10 +217,13 @@ const LogicModal = ({ onClose }) => {
               </h3>
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-sm space-y-2">
                 <p><strong>원리:</strong> 고득점자는 보통 점공 오픈 초기(1월 초)에 대부분 유입됩니다.</p>
-                <p><strong>로직:</strong> 1월 1일 00:00를 기점으로, 시간이 흐를수록 가중치를 미세하게 낮춥니다.</p>
-                <p className="text-blue-700">매 시간마다 정밀하게 계산되어 하루에 약 2%씩 미점공자의 위협도를 감소시킵니다. 즉, 늦게까지 점수를 공개하지 않는 사람은 '허수'일 확률이 높다고 판단합니다.</p>
+                <p><strong>로직:</strong> 1월 1일을 시작점으로, 점공 마감일인 2월 2일까지 시간이 흐를수록 가중치를 낮춥니다.</p>
+                <p className="text-blue-700">
+                  초반에 고득점자 유입이 집중된다는 점을 반영하여 <strong>로그 함수</strong>를 적용했습니다. 
+                  초반에 가중치가 빠르게 감소하고 후반에는 완만해지며, 마감 시점에는 최대 30%까지 보정됩니다.
+                </p>
                 <p className="text-xs text-gray-400 mt-2 border-t border-blue-200 pt-2">
-                  결과: 어제보다 오늘, 오늘보다 내일 내 예상 등수가 조금씩 좋아질 수 있습니다. (최대 30%까지 보정)
+                  결과: 분석 시점이 2월 2일에 가까울수록 내 예상 등수가 좋아질 확률이 높습니다.
                 </p>
               </div>
             </section>
@@ -273,6 +276,100 @@ const LogicModal = ({ onClose }) => {
 };
 
 // ==========================================
+// 0.3 등수 변화 추이 그래프 컴포넌트 (신규)
+// ==========================================
+const HistoryGraph = ({ history }) => {
+  if (!history || history.length < 2) {
+    return (
+      <div className="h-40 flex items-center justify-center text-gray-400 text-xs border border-dashed border-gray-200 rounded-lg bg-gray-50">
+        데이터가 2개 이상 쌓이면 그래프가 표시됩니다.
+      </div>
+    );
+  }
+
+  // 데이터 정렬 (시간순)
+  const sortedHistory = [...history].sort((a, b) => a.rawDate - b.rawDate);
+  
+  // Y축 범위 설정 (등수)
+  const ranks = sortedHistory.map(h => h.rank);
+  const minRank = Math.min(...ranks);
+  const maxRank = Math.max(...ranks);
+  const padding = (maxRank - minRank) || 1; // 등수가 같을 경우 대비
+  const yMin = Math.max(1, minRank - Math.ceil(padding * 0.2));
+  const yMax = maxRank + Math.ceil(padding * 0.2);
+
+  // SVG 크기
+  const width = 100;
+  const height = 60;
+  const points = sortedHistory.map((h, i) => {
+    const x = (i / (sortedHistory.length - 1)) * width;
+    // 등수는 숫자가 작을수록(1등) 좋으므로 Y축 반전 (1등이 위로 가도록)
+    // 일반 그래프: (value - min) / (max - min) * height
+    // 반전 그래프: (max - value) / (max - min) * height
+    const normalizedY = (yMax - h.rank) / (yMax - yMin); 
+    const y = (1 - normalizedY) * height * 0.8 + 10; // 상하 여백 10%
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="mt-6 pt-6 border-t border-gray-100">
+      <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 text-sm">
+        <LineChart size={16} className="text-indigo-600"/> 등수 변화 추이
+      </h3>
+      <div className="relative h-40 w-full">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
+          {/* Grid Lines (Optional) */}
+          <line x1="0" y1="10" x2="100" y2="10" stroke="#f0f0f0" strokeWidth="0.5" />
+          <line x1="0" y1={height * 0.8 + 10} x2="100" y2={height * 0.8 + 10} stroke="#f0f0f0" strokeWidth="0.5" />
+          
+          {/* Chart Line */}
+          <polyline
+            fill="none"
+            stroke="#4f46e5"
+            strokeWidth="1.5"
+            points={points}
+            vectorEffect="non-scaling-stroke"
+            className="drop-shadow-sm"
+          />
+          
+          {/* Data Points */}
+          {sortedHistory.map((h, i) => {
+            const x = (i / (sortedHistory.length - 1)) * width;
+            const normalizedY = (yMax - h.rank) / (yMax - yMin);
+            const y = (1 - normalizedY) * height * 0.8 + 10;
+            return (
+              <g key={i} className="group">
+                <circle
+                  cx={x}
+                  cy={y}
+                  r="1.5"
+                  fill="white"
+                  stroke="#4f46e5"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                  className="cursor-pointer hover:r-2 transition-all"
+                />
+                {/* Tooltip (CSS Hover) */}
+                <foreignObject x={x - 15} y={y - 15} width="30" height="20" className="overflow-visible pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="bg-indigo-900 text-white text-[8px] rounded px-1 py-0.5 text-center whitespace-nowrap shadow-lg absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1">
+                    {h.date}<br/>
+                    <span className="font-bold">{h.rank}등</span>
+                  </div>
+                </foreignObject>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className="flex justify-between text-[10px] text-gray-400 mt-1">
+        <span>{sortedHistory[0].date}</span>
+        <span>{sortedHistory[sortedHistory.length - 1].date}</span>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
 // 1. 핵심 알고리즘 (AI 보정치 반영)
 // ==========================================
 const calculatePrediction = (inputs, aiCorrectionData = { factor: 0, reason: '' }) => {
@@ -285,7 +382,7 @@ const calculatePrediction = (inputs, aiCorrectionData = { factor: 0, reason: '' 
   const competitionRate = realApplicants / quota;
   const revealedRatio = revealedCount / realApplicants; // 점공 비율 (0.0 ~ 1.0)
   
-  // [1] 날짜 및 시간 기반 로직
+  // [1] 날짜 및 시간 기반 로직 (2월 2일 마감 기준)
   let now;
   if (calcDate && calcHour !== '') {
     const [y, m, d] = calcDate.split('-').map(Number);
@@ -295,13 +392,21 @@ const calculatePrediction = (inputs, aiCorrectionData = { factor: 0, reason: '' 
   }
 
   const currentYear = now.getFullYear();
-  const startDate = new Date(currentYear, 0, 1);
-  const timeDiff = Math.max(0, now - startDate);
+  const startDate = new Date(currentYear, 0, 1); // 1월 1일
+  const endDate = new Date(currentYear, 1, 2);   // 2월 2일
   
-  const totalHoursPassed = Math.floor(timeDiff / (1000 * 60 * 60));
+  const totalPeriod = endDate - startDate;
+  const elapsedTime = Math.max(0, now - startDate);
+  const progress = Math.min(1, elapsedTime / totalPeriod);
+
+  // [MODIFIED] 시간 경과 보정 (Time Decay): 로그 함수 적용
+  const k = 15; 
+  const logProgress = Math.log(1 + k * progress) / Math.log(1 + k);
+  const timeDecayFactor = logProgress * 0.3; 
+
+  const totalHoursPassed = Math.floor(elapsedTime / (1000 * 60 * 60));
   const daysPassed = Math.floor(totalHoursPassed / 24);
   const hoursLeft = totalHoursPassed % 24; 
-  const timeDecayFactor = Math.min(0.3, totalHoursPassed * (0.02 / 24)); 
 
   // [2] 기본 가중치 산출
   const safeCompetitionRate = Math.max(1.1, competitionRate);
@@ -311,7 +416,7 @@ const calculatePrediction = (inputs, aiCorrectionData = { factor: 0, reason: '' 
   const ratioCorrection = (0.5 - revealedRatio) * 0.2;
   w = w + ratioCorrection;
 
-  // 점공 초반 보정
+  // 점공 초반 보정 (1월 1일 ~ 3일 사이)
   if (daysPassed <= 3) {
     w = Math.max(w, 0.35); 
   }
@@ -320,7 +425,7 @@ const calculatePrediction = (inputs, aiCorrectionData = { factor: 0, reason: '' 
   const aiFactor = aiCorrectionData.factor || 0;
   w = w + aiFactor;
 
-  const baseWeight = Math.max(0.15, w); // 최소값 약간 하향 조정 (최상위권 반영 위해)
+  const baseWeight = Math.max(0.15, w); 
   const isAutoWeight = true;
   
   // [3] 시나리오별 가중치 설정
@@ -434,7 +539,6 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
     setError(null);
   };
 
-  // [MODIFIED] skipAi 파라미터를 받아 분기 처리
   const handleSubmit = (skipAi = false) => {
     try {
       const q = parseFloat(inputs.quota);
@@ -446,7 +550,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         setError("모든 필수 항목을 입력해주세요.");
         return;
       }
-      onCalculate(skipAi); // onCalculate에 skipAi 전달
+      onCalculate(skipAi); 
     } catch (err) {
       setError(err.message);
     }
@@ -603,7 +707,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
 // ==========================================
 // 3. 결과 시각화 컴포넌트
 // ==========================================
-const ResultView = ({ result, inputs, isAiLoading }) => {
+const ResultView = ({ result, inputs, isAiLoading, history }) => {
   const [showDetail, setShowDetail] = useState(false);
   const [activeScenario, setActiveScenario] = useState('realistic');
 
@@ -932,6 +1036,9 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
           )}
         </div>
       </div>
+      
+      {/* [NEW] History Graph Component Injection */}
+      <HistoryGraph history={history} />
     </div>
   );
 };
@@ -1008,7 +1115,9 @@ function App() {
 
     // 1. 기본 계산 결과
     let tempResult = calculatePrediction(calcInputs);
-    setResult(tempResult);
+    
+    // [NEW] Define finalResult based on temp result initially
+    let finalResult = tempResult;
 
     // 2. AI 보정 실행 (AI 미사용 모드 아님 && 대학/학과 입력됨 && API Key 존재 시)
     if (!skipAi && inputs.university && inputs.department) {
@@ -1017,17 +1126,26 @@ function App() {
         const aiData = await getAiAdjustment(calcInputs, apiKey);
         
         // AI 보정치 적용하여 재계산
-        const finalResult = calculatePrediction(calcInputs, aiData);
-        setResult(finalResult);
+        finalResult = calculatePrediction(calcInputs, aiData);
         setIsAiLoading(false);
       }
     }
+    
+    // Set UI State
+    setResult(finalResult);
 
-    // 저장 로직
+    // 저장 로직 (History Log)
     if (inputs.university && inputs.department) {
       const now = new Date();
+      // Format timestamp for display (e.g. "1/5 14:30")
       const timestamp = `${now.getMonth() + 1}/${now.getDate()} ${now.getHours()}:${now.getMinutes() < 10 ? '0' + now.getMinutes() : now.getMinutes()}`;
       
+      const historyEntry = {
+        date: timestamp,
+        rawDate: now.getTime(),
+        rank: finalResult.ranks.realistic
+      };
+
       const newItem = { ...inputs, lastUpdated: timestamp };
 
       setSavedList(prevList => {
@@ -1037,10 +1155,19 @@ function App() {
 
         if (existingIndex >= 0) {
           const newList = [...prevList];
-          newList[existingIndex] = newItem;
+          const existingItem = newList[existingIndex];
+          const prevHistory = existingItem.history || [];
+          
+          // Add new entry to history (limit to last 20 entries to prevent bloat?)
+          const newHistory = [...prevHistory, historyEntry];
+
+          newList[existingIndex] = { 
+              ...newItem, 
+              history: newHistory 
+          };
           return newList;
         } else {
-          return [newItem, ...prevList];
+          return [{ ...newItem, history: [historyEntry] }, ...prevList];
         }
       });
     }
@@ -1052,6 +1179,9 @@ function App() {
       calcDate: getToday(),
       calcHour: getCurrentHour()
     });
+    // When loading, reset current result to null to prompt recalculation? 
+    // Or maybe we want to show the graph immediately?
+    // Current flow calculates on button click. Let's reset result.
     setResult(null);
   };
 
@@ -1072,6 +1202,11 @@ function App() {
       localStorage.removeItem('jeomgong_current_session');
     }
   };
+  
+  // Find current history for the active university/department
+  const currentHistory = savedList.find(
+    item => item.university === inputs.university && item.department === inputs.department
+  )?.history || [];
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-gray-900 pb-12">
@@ -1130,7 +1265,8 @@ function App() {
             </div>
           </div>
           <div className="w-full md:min-h-[600px]">
-             <ResultView result={result} inputs={inputs} isAiLoading={isAiLoading} />
+             {/* Pass history to ResultView */}
+             <ResultView result={result} inputs={inputs} isAiLoading={isAiLoading} history={currentHistory} />
           </div>
         </div>
       </main>
