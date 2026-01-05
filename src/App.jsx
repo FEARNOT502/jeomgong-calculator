@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X, BrainCircuit, Key, Save, Download } from 'lucide-react';
+import { Calculator, TrendingUp, GraduationCap, Clock, RotateCcw, FolderOpen, Trash2, ChevronDown, ChevronUp, Search, MousePointerClick, HelpCircle, X, BrainCircuit, Key, Save, Download, Zap } from 'lucide-react';
 
 // ==========================================
 // 설정: Gemini 모델 변경
 // ==========================================
-// 배포 후 더 성능 좋은 모델을 사용하려면 아래 값을 변경하세요.
-// 예: "gemini-1.5-pro", "gemini-pro" 등 (Google AI Studio에서 지원하는 모델명 확인 필요)
-const GEMINI_MODEL = "gemini-3-pro-preview"; 
+const GEMINI_MODEL = "gemini-3-flash-preview"; 
 
 // ==========================================
 // 0. Gemini API 호출 함수 (동적 키 사용)
@@ -436,7 +434,8 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
     setError(null);
   };
 
-  const handleSubmit = () => {
+  // [MODIFIED] skipAi 파라미터를 받아 분기 처리
+  const handleSubmit = (skipAi = false) => {
     try {
       const q = parseFloat(inputs.quota);
       const a = parseFloat(inputs.realApplicants);
@@ -447,7 +446,7 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         setError("모든 필수 항목을 입력해주세요.");
         return;
       }
-      onCalculate(); 
+      onCalculate(skipAi); // onCalculate에 skipAi 전달
     } catch (err) {
       setError(err.message);
     }
@@ -571,22 +570,32 @@ const InputForm = ({ inputs, setInputs, onCalculate, onReset, savedList, onLoad,
         </div>
       )}
 
-      <button 
-        onClick={handleSubmit} 
-        disabled={isAiLoading}
-        className="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-      >
-        {isAiLoading ? (
-          <>
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-            대학 성향 분석중...
-          </>
-        ) : (
-          <>
-            <Calculator size={20} /> 분석 및 저장하기
-          </>
-        )}
-      </button>
+      {/* [MODIFIED] 버튼을 두 개로 분리 */}
+      <div className="mt-6 grid grid-cols-2 gap-3">
+        <button 
+          onClick={() => handleSubmit(true)} // true = skipAi
+          className="bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-sm flex justify-center items-center gap-2"
+        >
+          <Zap size={18} className="text-gray-500" /> 일반 계산
+        </button>
+        
+        <button 
+          onClick={() => handleSubmit(false)} // false = useAi
+          disabled={isAiLoading}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg flex justify-center items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          {isAiLoading ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+              분석중...
+            </>
+          ) : (
+            <>
+              <BrainCircuit size={18} /> AI 정밀 분석
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 };
@@ -734,7 +743,6 @@ const ResultView = ({ result, inputs, isAiLoading }) => {
         <p className="text-sm text-gray-600 font-semibold mb-2 flex justify-center items-center gap-2">
           {scenarioNames[activeScenario]} 결과
         </p>
-        {/* [MODIFIED] pb-2 추가하여 폰트 아랫부분 잘림 방지 */}
         <div className="text-6xl font-extrabold text-indigo-900 mb-2 tracking-tighter pb-2">
           {currentRank}
           <span className="text-2xl font-normal text-gray-400 ml-1">등</span>
@@ -988,7 +996,8 @@ function App() {
   useEffect(() => { localStorage.setItem('jeomgong_current_session', JSON.stringify(inputs)); }, [inputs]);
   useEffect(() => { localStorage.setItem('jeomgong_list', JSON.stringify(savedList)); }, [savedList]);
 
-  const handleCalculate = async () => {
+  // [MODIFIED] handleCalculate가 skipAi 인자를 받도록 수정
+  const handleCalculate = async (skipAi = false) => {
     const calcInputs = {
       ...inputs,
       quota: parseFloat(inputs.quota),
@@ -1001,11 +1010,10 @@ function App() {
     let tempResult = calculatePrediction(calcInputs);
     setResult(tempResult);
 
-    // 2. AI 보정 실행 (대학/학과 입력 및 API 키 존재 시)
-    if (inputs.university || inputs.department) {
+    // 2. AI 보정 실행 (AI 미사용 모드 아님 && 대학/학과 입력됨 && API Key 존재 시)
+    if (!skipAi && inputs.university && inputs.department) {
       if (apiKey) {
         setIsAiLoading(true);
-        // [MODIFIED] API 키를 인자로 전달
         const aiData = await getAiAdjustment(calcInputs, apiKey);
         
         // AI 보정치 적용하여 재계산
